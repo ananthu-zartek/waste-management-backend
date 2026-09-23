@@ -1,0 +1,4 @@
+djangorestframework-simplejwt
+python-dotenv
+celery[redis]
+psycopg[binary]
