@@ -1,5 +1,6 @@
 import hashlib
 import json
+from datetime import datetime
 
 from django.core.exceptions import ValidationError
 from django.db import transaction
@@ -61,10 +62,8 @@ def eligible_drivers(slot, scheduled_date, pincode):
 
 
 def slot_is_future(slot, scheduled_date):
-    now = timezone.now()
-    return scheduled_date > now.date() or (
-        scheduled_date == now.date() and slot.start_time > now.time()
-    )
+    slot_start = timezone.make_aware(datetime.combine(scheduled_date, slot.start_time))
+    return slot_start > timezone.now()
 
 
 @transaction.atomic
