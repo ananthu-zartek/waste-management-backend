@@ -11,6 +11,8 @@ class CustomerProfileAdmin(admin.ModelAdmin):
 
 @admin.register(Address)
 class AddressAdmin(admin.ModelAdmin):
+    autocomplete_fields = ("pincode",)
+    list_select_related = ("customer__user", "pincode")
     list_display = (
         "id",
         "customer",
@@ -26,6 +28,6 @@ class AddressAdmin(admin.ModelAdmin):
         "house_no",
         "area",
         "city",
-        "pincode",
+        "pincode__pincode",
     )
     list_filter = ("address_type",)

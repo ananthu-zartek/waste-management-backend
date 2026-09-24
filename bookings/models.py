@@ -1,4 +1,6 @@
 from django.db import models
+from django.core.exceptions import ValidationError
+from catalog.services import validate_service_pincode
 
 from users.models import TimeStampedModel
 
@@ -83,6 +85,36 @@ class Booking(TimeStampedModel):
     def __str__(self):
         return f"Booking {self.pk} - {self.customer} - {self.scheduled_date}"
 
+    def clean(self):
+        super().clean()
+        if self.address_id:
+            if self.address.customer_id != self.customer_id:
+                raise ValidationError(
+                    {"address": "The address must belong to the customer."}
+                )
+            if self.pk:
+                previous = (
+                    type(self)
+                    .objects.filter(pk=self.pk)
+                    .values("address_id", "driver_id", "slot_id", "scheduled_date")
+                    .first()
+                )
+                if previous and all(
+                    getattr(self, field) == value for field, value in previous.items()
+                ):
+                    return
+            if self.address.pincode_id is None:
+                raise ValidationError(
+                    {"address": "Select a supported pincode for this address."}
+                )
+            try:
+                validate_service_pincode(self.address.pincode.pincode, self.driver)
+            except ValidationError as exc:
+                errors = dict(exc.message_dict)
+                if "pincode" in errors:
+                    errors["address"] = errors.pop("pincode")
+                raise ValidationError(errors) from exc
+
 
 class BookingRequest(TimeStampedModel):
     customer = models.ForeignKey("customers.CustomerProfile", on_delete=models.CASCADE)
@@ -103,7 +135,6 @@ class BookingRequest(TimeStampedModel):
                 fields=["customer", "key"], name="unique_booking_request"
             )
         ]
-
 
 
 class BookingWasteItem(TimeStampedModel):

@@ -127,6 +127,7 @@ class BookingViewSet(viewsets.ModelViewSet):
             "driver__user",
             "address",
             "address__customer__user",
+            "address__pincode",
             "slot",
             "scrap_booking",
         ).prefetch_related(
@@ -138,6 +139,11 @@ class BookingViewSet(viewsets.ModelViewSet):
             return queryset
         if user.user_type == User.UserType.CUSTOMER:
             return queryset.filter(customer__user=user)
+        if user.user_type == User.UserType.DRIVER and self.action in (
+            "list",
+            "retrieve",
+        ):
+            return queryset.filter(driver__user=user)
         return queryset.none()
 
 

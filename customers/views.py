@@ -9,7 +9,7 @@ class AddressViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         return Address.objects.filter(customer__user=self.request.user).select_related(
-            "customer__user"
+            "customer__user", "pincode"
         )
 
     def perform_create(self, serializer):

@@ -15,6 +15,12 @@ class DriverProfile(TimeStampedModel):
     license_number = models.CharField(max_length=100, unique=True)
     vehicle_number = models.CharField(max_length=50, unique=True)
     is_available = models.BooleanField(default=True)
+    service_pincodes = models.ManyToManyField(
+        "catalog.ServicePincode",
+        related_name="drivers",
+        blank=True,
+        limit_choices_to={"is_active": True, "service_area__is_active": True},
+    )
 
     def __str__(self):
         return f"{self.user} - {self.vehicle_number}"

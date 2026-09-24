@@ -45,6 +45,7 @@ INSTALLED_APPS = [
 
     # Third-party
     "rest_framework",
+    "django_celery_beat",
 
     # Local apps
     "users.apps.UsersConfig",
@@ -146,12 +147,7 @@ REST_FRAMEWORK = {
 }
 
 CELERY_BROKER_URL = os.environ.get("CELERY_BROKER_URL", "redis://localhost:6379/0")
-CELERY_BEAT_SCHEDULE = {
-    "expire-pending-bookings": {
-        "task": "bookings.tasks.expire_pending_bookings",
-        "schedule": timedelta(minutes=5),
-    },
-}
+CELERY_BEAT_SCHEDULER = "django_celery_beat.schedulers:DatabaseScheduler"
 
 SIMPLE_JWT = {
     "ACCESS_TOKEN_LIFETIME": timedelta(days=int(os.environ["JWT_ACCESS_TOKEN_DAYS"])),

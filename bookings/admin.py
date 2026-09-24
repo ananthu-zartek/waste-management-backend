@@ -5,7 +5,8 @@ from .models import (
     Booking,
     BookingWasteItem,
     ScrapBooking,
-    ScrapBookingItem,BookingRequest
+    ScrapBookingItem,
+    BookingRequest,
 )
 
 admin.site.register(BookingRequest)
@@ -45,6 +46,7 @@ class BookingAdmin(admin.ModelAdmin):
         "customer__user",
         "driver__user",
         "address__customer__user",
+        "address__pincode",
         "slot",
     )
 

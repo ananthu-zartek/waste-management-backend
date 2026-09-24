@@ -1,7 +1,39 @@
 from django.db import models
-from django.core.validators import MinValueValidator
+from django.core.validators import MinValueValidator, RegexValidator
 
 from users.models import TimeStampedModel
+
+
+class ServiceArea(TimeStampedModel):
+    name = models.CharField(max_length=150, unique=True)
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ["name"]
+
+    def __str__(self):
+        return self.name
+
+
+class ServicePincode(TimeStampedModel):
+    service_area = models.ForeignKey(
+        ServiceArea, on_delete=models.PROTECT, related_name="pincodes"
+    )
+    pincode = models.CharField(
+        max_length=6,
+        unique=True,
+        validators=[
+            RegexValidator(r"^[1-9][0-9]{5}$", "Enter a valid six-digit pincode.")
+        ],
+    )
+    area_name = models.CharField(max_length=150)
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ["pincode"]
+
+    def __str__(self):
+        return f"{self.pincode} - {self.area_name}"
 
 
 class ScrapMaterial(TimeStampedModel):

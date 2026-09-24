@@ -15,7 +15,7 @@ class DriverProfileAdmin(admin.ModelAdmin):
     )
     list_filter = ("is_available",)
     search_fields = ("user__phone_number", "email", "license_number", "vehicle_number")
-    autocomplete_fields = ("user",)
+    autocomplete_fields = ("user", "service_pincodes")
 
 
 @admin.register(DriverSlot)
@@ -38,12 +38,3 @@ class DriverSlotAdmin(admin.ModelAdmin):
                 "driver", "driver__user", "slot", "booking", "booking__customer__user"
             )
         )
-
-    def has_add_permission(self, request):
-        return False
-
-    def has_change_permission(self, request, obj=None):
-        return False
-
-    # def has_delete_permission(self, request, obj=None):
-    #     return False

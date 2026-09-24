@@ -3,6 +3,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import BasePermission, SAFE_METHODS
 from django.utils import timezone
+from django.db.models import Prefetch
 from rest_framework.exceptions import ValidationError
 
 from bookings.services import eligible_drivers, slot_is_future
@@ -15,6 +16,8 @@ from .models import (
     WasteSubCategory,
     TimeSlot,
     ScrapMaterial,
+    ServiceArea,
+    ServicePincode,
 )
 from .serializers import (
     WasteTypeSerializer,
@@ -23,6 +26,8 @@ from .serializers import (
     TimeSlotSerializer,
     ScrapMaterialSerializer,
     SlotAvailabilityQuerySerializer,
+    ServiceAreaSerializer,
+    ServicePincodeSerializer,
 )
 
 
@@ -34,9 +39,42 @@ class CatalogPermission(BasePermission):
         )
 
 
+class ServiceAreaViewSet(ModelViewSet):
+    permission_classes = [CatalogPermission]
+    serializer_class = ServiceAreaSerializer
+    http_method_names = ["get", "post", "put", "patch", "head", "options"]
+
+    def get_queryset(self):
+        areas = ServiceArea.objects.all()
+        pincodes = ServicePincode.objects.all()
+        if self.request.user.user_type != User.UserType.ADMIN:
+            areas = areas.filter(is_active=True)
+            pincodes = pincodes.filter(is_active=True)
+        return areas.prefetch_related(Prefetch("pincodes", queryset=pincodes))
+
+
+class ServicePincodeViewSet(ModelViewSet):
+    permission_classes = [CatalogPermission]
+    serializer_class = ServicePincodeSerializer
+    http_method_names = ["get", "post", "put", "patch", "head", "options"]
+
+    def get_queryset(self):
+        queryset = ServicePincode.objects.select_related("service_area")
+        if self.request.user.user_type != User.UserType.ADMIN:
+            queryset = queryset.filter(is_active=True, service_area__is_active=True)
+        area_id = self.request.query_params.get("service_area")
+        if area_id is not None:
+            if not area_id.isascii() or not area_id.isdigit():
+                raise ValidationError(
+                    {"service_area": "Select a valid service area ID."}
+                )
+            queryset = queryset.filter(service_area_id=area_id)
+        return queryset
+
+
 class ScrapMaterialViewSet(ModelViewSet):
     serializer_class = ScrapMaterialSerializer
-    permission_classes = [CatalogPermission]
+    # permission_classes = [CatalogPermission]
 
     def get_queryset(self):
         if self.request.user.user_type == User.UserType.ADMIN:
@@ -59,13 +97,15 @@ class TimeSlotViewSet(ModelViewSet):
         query = SlotAvailabilityQuerySerializer(data=request.query_params)
         query.is_valid(raise_exception=True)
         date = query.validated_data["date"]
-        if date < timezone.localdate():
+        if date < timezone.now().date():
             raise ValidationError({"date": "Select today or a future date."})
         result = []
         for slot in TimeSlot.objects.filter(is_active=True):
             remaining = sum(
                 SLOT_CAPACITY - driver.booking_count
-                for driver in eligible_drivers(slot, date)
+                for driver in eligible_drivers(
+                    slot, date, query.validated_data["pincode"]
+                )
             )
             if not slot_is_future(slot, date):
                 remaining = 0

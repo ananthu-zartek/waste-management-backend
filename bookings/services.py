@@ -9,6 +9,7 @@ from django.utils import timezone
 
 from drivers.models import DriverProfile, DriverSlot
 from users.models import User
+from catalog.services import validate_service_pincode
 
 from .exceptions import IdempotencyConflict, NoSlotAvailable
 from .models import Booking, BookingRequest
@@ -37,13 +38,16 @@ def get_booking_request(*, customer, key, payload, role):
     return attempt
 
 
-def eligible_drivers(slot, scheduled_date):
+def eligible_drivers(slot, scheduled_date, pincode):
     reservations = reserved_driver_slots().filter(slot=slot, date=scheduled_date)
     return (
         DriverProfile.objects.filter(
             is_available=True,
             user__is_active=True,
             user__user_type=User.UserType.DRIVER,
+            service_pincodes__pincode=pincode,
+            service_pincodes__is_active=True,
+            service_pincodes__service_area__is_active=True,
         )
         .annotate(
             booking_count=Count(
@@ -57,7 +61,7 @@ def eligible_drivers(slot, scheduled_date):
 
 
 def slot_is_future(slot, scheduled_date):
-    now = timezone.localtime()
+    now = timezone.now()
     return scheduled_date > now.date() or (
         scheduled_date == now.date() and slot.start_time > now.time()
     )
@@ -82,10 +86,22 @@ def create_booking(
         raise ValidationError({"slot": "Select an active, future time slot."})
     if address.customer_id != customer.pk:
         raise ValidationError({"address": "The address must belong to the customer."})
+    if address.pincode_id is None:
+        raise ValidationError(
+            {"address": "Select a supported pincode for this address."}
+        )
+    pincode = address.pincode.pincode
+    validate_service_pincode(pincode)
 
     driver = None
-    if source == Booking.BookingSource.CUSTOMER:
-        candidates = eligible_drivers(slot, scheduled_date)
+    if source == Booking.BookingSource.CUSTOMER or driver_id is not None:
+        if driver_id is not None:
+            try:
+                selected_driver = DriverProfile.objects.get(pk=driver_id)
+            except DriverProfile.DoesNotExist as exc:
+                raise ValidationError({"driver": "Select a valid driver."}) from exc
+            validate_service_pincode(pincode, selected_driver)
+        candidates = eligible_drivers(slot, scheduled_date, pincode)
         if driver_id is not None:
             candidates = candidates.filter(pk=driver_id)
         # Lock drivers in ID order; count only after the driver lock is held.
@@ -97,6 +113,9 @@ def create_booking(
                     is_available=True,
                     user__is_active=True,
                     user__user_type=User.UserType.DRIVER,
+                    service_pincodes__pincode=pincode,
+                    service_pincodes__is_active=True,
+                    service_pincodes__service_area__is_active=True,
                 )
                 .first()
             )
@@ -160,7 +179,15 @@ def confirm_booking(*, booking_id, customer_id):
     reservation = DriverSlot.objects.filter(booking=booking).first()
     if reservation is None:
         raise ValidationError("Booking has no reserved capacity.")
-    DriverProfile.objects.select_for_update().get(pk=reservation.driver_id)
+    if reservation.driver_id != booking.driver_id:
+        raise ValidationError(
+            {"driver": "The booking driver does not match its reservation."}
+        )
+    if booking.address.pincode_id is None:
+        raise ValidationError(
+            {"address": "Select a supported pincode for this address."}
+        )
+    validate_service_pincode(booking.address.pincode.pincode, booking.driver)
     now = timezone.now()
     if now >= booking.created_at + CONFIRMATION_WINDOW:
         raise ValidationError("Booking confirmation window has expired.")
