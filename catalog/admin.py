@@ -54,6 +54,12 @@ class WasteTypeAdmin(admin.ModelAdmin):
     ordering = ("name",)
 
 
+class WasteSubCategoryInline(admin.TabularInline):
+    model = WasteSubCategory
+    extra = 1
+    show_change_link = True
+
+
 @admin.register(WasteCategory)
 class WasteCategoryAdmin(admin.ModelAdmin):
     list_display = (
@@ -74,6 +80,7 @@ class WasteCategoryAdmin(admin.ModelAdmin):
         "waste_type__name",
     )
     autocomplete_fields = ("waste_type",)
+    inlines = (WasteSubCategoryInline,)
     ordering = (
         "waste_type",
         "name",

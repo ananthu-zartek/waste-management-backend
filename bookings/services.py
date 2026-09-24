@@ -1,5 +1,6 @@
 import hashlib
 import json
+import random
 from datetime import datetime
 
 from django.core.exceptions import ValidationError
@@ -56,9 +57,42 @@ def eligible_drivers(slot, scheduled_date, pincode):
                 filter=Q(driver_slots__in=reservations),
             )
         )
-        .filter(booking_count__lt=SLOT_CAPACITY)
+        .distinct()
+    )
+
+
+def assign_driver(*, slot, scheduled_date, pincode, driver_id=None):
+    """Lock eligible drivers, then assign the least-loaded driver at random on ties."""
+    candidate_ids = list(
+        eligible_drivers(slot, scheduled_date, pincode)
+        .filter(**({"pk": driver_id} if driver_id is not None else {}))
+        .values_list("pk", flat=True)
+    )
+    if not candidate_ids:
+        return None
+
+    # Lock in stable order so overlapping assignment transactions cannot deadlock.
+    candidates = list(
+        DriverProfile.objects.filter(pk__in=candidate_ids)
+        .select_for_update(of=("self",))
         .order_by("pk")
     )
+    reservations = (
+        reserved_driver_slots()
+        .filter(driver__in=candidates, slot=slot, date=scheduled_date)
+        .values("driver_id")
+        .annotate(count=Count("pk"))
+    )
+    counts = {row["driver_id"]: row["count"] for row in reservations}
+    lowest_count = min(counts.get(candidate.pk, 0) for candidate in candidates)
+    least_loaded = [
+        candidate
+        for candidate in candidates
+        if counts.get(candidate.pk, 0) == lowest_count
+    ]
+    if lowest_count >= SLOT_CAPACITY:
+        return None
+    return random.choice(least_loaded)
 
 
 def slot_is_future(slot, scheduled_date):
@@ -82,13 +116,11 @@ def create_booking(
 ):
     """Create a booking and reserve customer capacity atomically."""
     if not slot.is_active or not slot_is_future(slot, scheduled_date):
-        raise ValidationError({"slot": "Select an active, future time slot."})
+        raise ValidationError("Select an active, future time slot.")
     if address.customer_id != customer.pk:
-        raise ValidationError({"address": "The address must belong to the customer."})
+        raise ValidationError("The address must belong to the customer.")
     if address.pincode_id is None:
-        raise ValidationError(
-            {"address": "Select a supported pincode for this address."}
-        )
+        raise ValidationError("Select a supported pincode for this address.")
     pincode = address.pincode.pincode
     validate_service_pincode(pincode)
 
@@ -98,40 +130,14 @@ def create_booking(
             try:
                 selected_driver = DriverProfile.objects.get(pk=driver_id)
             except DriverProfile.DoesNotExist as exc:
-                raise ValidationError({"driver": "Select a valid driver."}) from exc
+                raise ValidationError("Select a valid driver.") from exc
             validate_service_pincode(pincode, selected_driver)
-        candidates = eligible_drivers(slot, scheduled_date, pincode)
-        if driver_id is not None:
-            candidates = candidates.filter(pk=driver_id)
-        # Lock drivers in ID order; count only after the driver lock is held.
-        for candidate_id in candidates.values_list("pk", flat=True):
-            candidate = (
-                DriverProfile.objects.select_for_update(of=("self",))
-                .filter(
-                    pk=candidate_id,
-                    is_available=True,
-                    user__is_active=True,
-                    user__user_type=User.UserType.DRIVER,
-                    service_pincodes__pincode=pincode,
-                    service_pincodes__is_active=True,
-                    service_pincodes__service_area__is_active=True,
-                )
-                .first()
-            )
-            if candidate is None:
-                continue
-            count = (
-                reserved_driver_slots()
-                .filter(
-                    driver=candidate,
-                    slot=slot,
-                    date=scheduled_date,
-                )
-                .count()
-            )
-            if count < SLOT_CAPACITY:
-                driver = candidate
-                break
+        driver = assign_driver(
+            slot=slot,
+            scheduled_date=scheduled_date,
+            pincode=pincode,
+            driver_id=driver_id,
+        )
         if driver is None:
             raise NoSlotAvailable()
 

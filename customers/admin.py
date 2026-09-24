@@ -7,6 +7,7 @@ from .models import CustomerProfile, Address
 class CustomerProfileAdmin(admin.ModelAdmin):
     list_display = ("id", "user")
     search_fields = ("user__phone_number", "email")
+    ordering = ("id",)
 
 
 @admin.register(Address)
@@ -31,3 +32,4 @@ class AddressAdmin(admin.ModelAdmin):
         "pincode__pincode",
     )
     list_filter = ("address_type",)
+    ordering = ("id",)

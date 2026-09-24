@@ -16,6 +16,7 @@ class DriverProfileAdmin(admin.ModelAdmin):
     list_filter = ("is_available",)
     search_fields = ("user__phone_number", "email", "license_number", "vehicle_number")
     autocomplete_fields = ("user", "service_pincodes")
+    ordering = ("id",)
 
 
 @admin.register(DriverSlot)

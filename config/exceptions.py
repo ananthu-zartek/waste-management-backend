@@ -14,14 +14,7 @@ logger = logging.getLogger(__name__)
 
 def error_reason(detail):
     if isinstance(detail, dict):
-        return "; ".join(
-            (
-                error_reason(value)
-                if field in ("detail", "non_field_errors", "error")
-                else f"{field}: {error_reason(value)}"
-            )
-            for field, value in detail.items()
-        )
+        return "; ".join(error_reason(value) for value in detail.values())
     if isinstance(detail, (list, tuple)):
         return "; ".join(error_reason(value) for value in detail)
     return str(detail)
