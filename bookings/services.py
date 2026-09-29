@@ -5,7 +5,7 @@ from datetime import datetime
 
 from django.core.exceptions import ValidationError
 from django.db import transaction
-from django.db.models import Count, Q
+from django.db.models import Count
 from django.http import Http404
 from django.utils import timezone
 
@@ -40,31 +40,21 @@ def get_booking_request(*, customer, key, payload, role):
     return attempt
 
 
-def eligible_drivers(slot, scheduled_date, pincode):
-    reservations = reserved_driver_slots().filter(slot=slot, date=scheduled_date)
-    return (
-        DriverProfile.objects.filter(
-            is_available=True,
-            user__is_active=True,
-            user__user_type=User.UserType.DRIVER,
-            service_pincodes__pincode=pincode,
-            service_pincodes__is_active=True,
-            service_pincodes__service_area__is_active=True,
-        )
-        .annotate(
-            booking_count=Count(
-                "driver_slots",
-                filter=Q(driver_slots__in=reservations),
-            )
-        )
-        .distinct()
-    )
+def drivers_serving_pincode(pincode):
+    return DriverProfile.objects.filter(
+        is_available=True,
+        user__is_active=True,
+        user__user_type=User.UserType.DRIVER,
+        service_pincodes__pincode=pincode,
+        service_pincodes__is_active=True,
+        service_pincodes__service_area__is_active=True,
+    ).distinct()
 
 
 def assign_driver(*, slot, scheduled_date, pincode, driver_id=None):
     """Lock eligible drivers, then assign the least-loaded driver at random on ties."""
     candidate_ids = list(
-        eligible_drivers(slot, scheduled_date, pincode)
+        drivers_serving_pincode(pincode)
         .filter(**({"pk": driver_id} if driver_id is not None else {}))
         .values_list("pk", flat=True)
     )

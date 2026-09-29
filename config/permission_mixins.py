@@ -1,6 +1,4 @@
 from rest_framework.permissions import AllowAny
-from users.models import User
-from rest_framework.exceptions import PermissionDenied
 
 
 class AllowAnyMixin:

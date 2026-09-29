@@ -3,7 +3,7 @@ from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
-
+from config.permission_mixins import AllowAnyMixin
 
 from .models import User
 from .serializers import (
@@ -16,7 +16,7 @@ from .serializers import (
 )
 
 
-class UserViewSet(viewsets.ModelViewSet):
+class UserViewSet(AllowAnyMixin, viewsets.ModelViewSet):
     queryset = User.objects.all()
     serializer_class = OTPRequestSerializer
     http_method_names = ["post", "options", "head"]

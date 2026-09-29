@@ -138,7 +138,7 @@ USE_TZ = True
 STATIC_URL = 'static/'
 
 REST_FRAMEWORK = {
-    "EXCEPTION_HANDLER": "config.exceptions.exception_handler",
+    # "EXCEPTION_HANDLER": "config.exceptions.exception_handler",
     "DEFAULT_AUTHENTICATION_CLASSES": [
         "rest_framework_simplejwt.authentication.JWTAuthentication",
         "rest_framework.authentication.SessionAuthentication",

@@ -1,5 +1,6 @@
 from rest_framework import serializers
 from django.core.exceptions import ValidationError as DjangoValidationError
+from django.utils import timezone
 from .services import validate_service_pincode
 
 from .models import (
@@ -37,8 +38,17 @@ class ScrapMaterialSerializer(serializers.ModelSerializer):
 
 
 class SlotAvailabilityQuerySerializer(serializers.Serializer):
-    date = serializers.DateField()
+    date = serializers.DateField(
+        error_messages={
+            "invalid": "Invalid date. Please provide a valid calendar date."
+        }
+    )
     pincode = serializers.CharField(max_length=6)
+
+    def validate_date(self, value):
+        if value < timezone.localdate():
+            raise serializers.ValidationError("Select today or a future date.")
+        return value
 
     def validate(self, attrs):
         try:
