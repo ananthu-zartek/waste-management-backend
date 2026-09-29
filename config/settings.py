@@ -45,6 +45,7 @@ INSTALLED_APPS = [
 
     # Third-party
     "rest_framework",
+    "django_filters",
     "django_celery_beat",
 
     # Local apps
@@ -138,12 +139,30 @@ STATIC_URL = 'static/'
 
 REST_FRAMEWORK = {
     "EXCEPTION_HANDLER": "config.exceptions.exception_handler",
-    "DEFAULT_AUTHENTICATION_CLASSES": (
+    "DEFAULT_AUTHENTICATION_CLASSES": [
         "rest_framework_simplejwt.authentication.JWTAuthentication",
-    ),
-    "DEFAULT_PERMISSION_CLASSES": (
+        "rest_framework.authentication.SessionAuthentication",
+    ],
+    "DEFAULT_PERMISSION_CLASSES": [
         "rest_framework.permissions.IsAuthenticated",
-    ),
+    ],
+    "DEFAULT_RENDERER_CLASSES": [
+        "rest_framework.renderers.JSONRenderer",
+        *(["rest_framework.renderers.BrowsableAPIRenderer"] if DEBUG else []),
+    ],
+    "DEFAULT_FILTER_BACKENDS": [
+        "django_filters.rest_framework.DjangoFilterBackend",
+    ],
+    "DEFAULT_THROTTLE_CLASSES": [
+        "rest_framework.throttling.AnonRateThrottle",
+        "rest_framework.throttling.UserRateThrottle",
+    ],
+    "DEFAULT_THROTTLE_RATES": {
+        "anon": os.environ.get("DJANGO_ANON_THROTTLE_RATE", "100/day"),
+        "user": os.environ.get("DJANGO_USER_THROTTLE_RATE", "1000/day"),
+    },
+    "DEFAULT_PAGINATION_CLASS": "config.pagination.OptionalPagination",
+    "PAGE_SIZE": 10,
 }
 
 CELERY_BROKER_URL = os.environ.get("CELERY_BROKER_URL", "redis://localhost:6379/0")

@@ -1,8 +1,12 @@
 import json
 
 from django.db import transaction
+from django.db.models import CharField
+from django.db.models.functions import Cast
+from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import status, viewsets
 from rest_framework.renderers import JSONRenderer
+from rest_framework.filters import SearchFilter
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.exceptions import PermissionDenied, ValidationError
@@ -11,7 +15,7 @@ from django.core.exceptions import ValidationError as DjangoValidationError
 from users.models import User
 from customers.models import CustomerProfile
 from .services import cancel_booking, confirm_booking, get_booking_request
-
+from .filters import BookingFilter
 from .models import (
     Booking,
     BookingWasteItem,
@@ -35,7 +39,22 @@ from . import waste_services, scrap_services
 
 class BookingViewSet(viewsets.ModelViewSet):
     serializer_class = BookingSerializer
+    filter_backends = [DjangoFilterBackend, SearchFilter]
+    filterset_class = BookingFilter
+    search_fields = [
+        "note",
+        "customer__name",
+        "customer__user__phone_number",
+        "address__house_no",
+        "address__area",
+        "address__city",
+        "search_id",
+    ]
     http_method_names = ["get", "post", "patch", "head", "options"]
+    def filter_queryset(self, queryset):
+        if self.action == "list":
+            return super().filter_queryset(queryset)
+        return queryset
 
     def get_serializer_class(self):
         if self.action == "create":
@@ -45,8 +64,6 @@ class BookingViewSet(viewsets.ModelViewSet):
     @transaction.atomic
     def create(self, request, *args, **kwargs):
         user = request.user
-        if user.user_type not in (User.UserType.ADMIN, User.UserType.CUSTOMER):
-            raise PermissionDenied("Only customers and admins can create bookings.")
         key = request.headers.get("Idempotency-Key", "").strip()
         if not key or len(key) > 128:
             raise ValidationError(
@@ -120,29 +137,31 @@ class BookingViewSet(viewsets.ModelViewSet):
         )
 
     def get_queryset(self):
-        queryset = Booking.objects.select_related(
-            "customer",
-            "customer__user",
-            "driver",
-            "driver__user",
-            "address",
-            "address__customer__user",
-            "address__pincode",
-            "slot",
-            "scrap_booking",
-        ).prefetch_related(
-            "waste_items__subcategory__category",
-            "scrap_booking__items__material",
+        queryset = (
+            Booking.objects.select_related(
+                "customer",
+                "customer__user",
+                "driver",
+                "driver__user",
+                "address",
+                "address__customer__user",
+                "address__pincode",
+                "slot",
+                "scrap_booking",
+            )
+            .prefetch_related(
+                "waste_items__subcategory__category",
+                "scrap_booking__items__material",
+            )
+            .annotate(search_id=Cast("id", output_field=CharField()))
+            .order_by("scheduled_date", "slot__start_time", "pk")
         )
         user = self.request.user
         if user.user_type == User.UserType.ADMIN:
             return queryset
         if user.user_type == User.UserType.CUSTOMER:
             return queryset.filter(customer__user=user)
-        if user.user_type == User.UserType.DRIVER and self.action in (
-            "list",
-            "retrieve",
-        ):
+        if user.user_type == User.UserType.DRIVER:
             return queryset.filter(driver__user=user)
         return queryset.none()
 
@@ -154,16 +173,6 @@ class BookingWasteItemViewSet(viewsets.ModelViewSet):
         if self.action == "create":
             return BookingWasteItemCreateSerializer
         return BookingWasteItemSerializer
-
-    def perform_create(self, serializer):
-        booking = serializer.validated_data["booking"]
-        user = self.request.user
-        if user.user_type != User.UserType.ADMIN and (
-            user.user_type != User.UserType.CUSTOMER
-            or booking.customer.user_id != user.pk
-        ):
-            raise PermissionDenied("You can only add items to your own bookings.")
-        serializer.save()
 
     def perform_destroy(self, instance):
         waste_services.delete_item(instance)
@@ -202,16 +211,6 @@ class ScrapBookingItemViewSet(viewsets.ModelViewSet):
         if self.action == "create":
             return ScrapBookingItemCreateSerializer
         return ScrapBookingItemSerializer
-
-    def perform_create(self, serializer):
-        booking = serializer.validated_data["scrap_booking"].booking
-        user = self.request.user
-        if user.user_type != User.UserType.ADMIN and (
-            user.user_type != User.UserType.CUSTOMER
-            or booking.customer.user_id != user.pk
-        ):
-            raise PermissionDenied("You can only add items to your own bookings.")
-        serializer.save()
 
     def perform_destroy(self, instance):
         scrap_services.delete_item(instance)

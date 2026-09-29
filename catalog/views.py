@@ -40,7 +40,6 @@ class CatalogPermission(BasePermission):
 
 
 class ServiceAreaViewSet(ModelViewSet):
-    permission_classes = [CatalogPermission]
     serializer_class = ServiceAreaSerializer
     http_method_names = ["get", "post", "put", "patch", "head", "options"]
 
@@ -54,7 +53,6 @@ class ServiceAreaViewSet(ModelViewSet):
 
 
 class ServicePincodeViewSet(ModelViewSet):
-    permission_classes = [CatalogPermission]
     serializer_class = ServicePincodeSerializer
     http_method_names = ["get", "post", "put", "patch", "head", "options"]
 
@@ -74,7 +72,6 @@ class ServicePincodeViewSet(ModelViewSet):
 
 class ScrapMaterialViewSet(ModelViewSet):
     serializer_class = ScrapMaterialSerializer
-    # permission_classes = [CatalogPermission]
 
     def get_queryset(self):
         if self.request.user.user_type == User.UserType.ADMIN:
@@ -83,7 +80,6 @@ class ScrapMaterialViewSet(ModelViewSet):
 
 
 class TimeSlotViewSet(ModelViewSet):
-    permission_classes = [CatalogPermission]
     queryset = TimeSlot.objects.all()
     serializer_class = TimeSlotSerializer
 
@@ -107,13 +103,11 @@ class TimeSlotViewSet(ModelViewSet):
                     slot, date, query.validated_data["pincode"]
                 )
             )
-            if not slot_is_future(slot, date):
-                remaining = 0
             result.append(
                 {
                     **TimeSlotSerializer(slot).data,
                     "date": date.isoformat(),
-                    "is_available": remaining > 0,
+                    "is_available": slot_is_future(slot, date),
                     "remaining_capacity": remaining,
                 }
             )
@@ -121,13 +115,11 @@ class TimeSlotViewSet(ModelViewSet):
 
 
 class WasteTypeViewSet(ModelViewSet):
-    permission_classes = [CatalogPermission]
     queryset = WasteType.objects.prefetch_related("categories__subcategories__category")
     serializer_class = WasteTypeSerializer
 
 
 class WasteCategoryViewSet(ModelViewSet):
-    permission_classes = [CatalogPermission]
     queryset = WasteCategory.objects.select_related("waste_type").prefetch_related(
         "subcategories__category"
     )
@@ -135,7 +127,6 @@ class WasteCategoryViewSet(ModelViewSet):
 
 
 class WasteSubCategoryViewSet(ModelViewSet):
-    permission_classes = [CatalogPermission]
     queryset = WasteSubCategory.objects.select_related(
         "category",
         "category__waste_type",

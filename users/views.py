@@ -1,9 +1,9 @@
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied
-from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
+
 
 from .models import User
 from .serializers import (
@@ -19,7 +19,6 @@ from .serializers import (
 class UserViewSet(viewsets.ModelViewSet):
     queryset = User.objects.all()
     serializer_class = OTPRequestSerializer
-    permission_classes = [AllowAny]
     http_method_names = ["post", "options", "head"]
     serializer_action_classes = {
         "verify_otp": VerifyOTPSerializer,
@@ -51,7 +50,6 @@ class UserViewSet(viewsets.ModelViewSet):
     @action(
         detail=False,
         methods=["post"],
-        permission_classes=[AllowAny],
         url_path="verify-otp",
     )
     def verify_otp(self, request):
@@ -70,7 +68,6 @@ class UserViewSet(viewsets.ModelViewSet):
     @action(
         detail=False,
         methods=["post"],
-        permission_classes=[AllowAny],
         url_path="token-refresh",
     )
     def token_refresh(self, request):
