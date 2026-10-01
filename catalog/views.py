@@ -1,4 +1,4 @@
-from rest_framework.viewsets import ModelViewSet
+from rest_framework import viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.db.models import Count
@@ -28,26 +28,24 @@ from .serializers import (
 )
 
 
-class ServiceAreaViewSet(ModelViewSet):
+class ServiceAreaViewSet(viewsets.ModelViewSet):
     queryset = ServiceArea.objects.prefetch_related("pincodes")
     serializer_class = ServiceAreaSerializer
-    http_method_names = ["get", "post", "put", "patch", "head", "options"]
     filterset_fields = ["is_active"]
 
 
-class ServicePincodeViewSet(ModelViewSet):
+class ServicePincodeViewSet(viewsets.ModelViewSet):
     queryset = ServicePincode.objects.select_related("service_area")
     serializer_class = ServicePincodeSerializer
-    http_method_names = ["get", "post", "put", "patch", "head", "options"]
     filterset_fields = ["service_area", "is_active"]
 
 
-class ScrapMaterialViewSet(ModelViewSet):
+class ScrapMaterialViewSet(viewsets.ModelViewSet):
     queryset = ScrapMaterial.objects.all()
     serializer_class = ScrapMaterialSerializer
 
 
-class TimeSlotViewSet(ModelViewSet):
+class TimeSlotViewSet(viewsets.ModelViewSet):
     queryset = TimeSlot.objects.all()
     serializer_class = TimeSlotSerializer
 
@@ -96,19 +94,21 @@ class TimeSlotViewSet(ModelViewSet):
         return Response(result)
 
 
-class WasteTypeViewSet(ModelViewSet):
+class WasteTypeViewSet(viewsets.ModelViewSet):
     queryset = WasteType.objects.prefetch_related("categories__subcategories__category")
     serializer_class = WasteTypeSerializer
 
 
-class WasteCategoryViewSet(ModelViewSet):
-    queryset = WasteCategory.objects.select_related("waste_type").prefetch_related(
-        "subcategories__category"
+class WasteCategoryViewSet(viewsets.ModelViewSet):
+    queryset = (
+        WasteCategory.objects.select_related("waste_type")
+        .prefetch_related("subcategories__category")
+        .order_by("id")
     )
     serializer_class = WasteCategorySerializer
 
 
-class WasteSubCategoryViewSet(ModelViewSet):
+class WasteSubCategoryViewSet(viewsets.ModelViewSet):
     queryset = WasteSubCategory.objects.select_related(
         "category",
         "category__waste_type",

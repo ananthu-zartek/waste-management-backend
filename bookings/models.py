@@ -84,27 +84,6 @@ class Booking(TimeStampedModel):
         return f"Booking {self.pk} - {self.customer} - {self.scheduled_date}"
 
 
-class BookingRequest(TimeStampedModel):
-    customer = models.ForeignKey("customers.CustomerProfile", on_delete=models.CASCADE)
-    booking = models.OneToOneField(
-        Booking,
-        on_delete=models.CASCADE,
-        related_name="creation_request",
-        null=True,
-        blank=True,
-    )
-    key = models.CharField(max_length=128)
-    fingerprint = models.CharField(max_length=64)
-    response = models.JSONField(null=True)
-
-    class Meta:
-        constraints = [
-            models.UniqueConstraint(
-                fields=["customer", "key"], name="unique_booking_request"
-            )
-        ]
-
-
 class BookingWasteItem(TimeStampedModel):
     booking = models.ForeignKey(
         Booking, on_delete=models.CASCADE, related_name="waste_items"

@@ -1,5 +1,3 @@
-import hashlib
-import json
 import random
 from datetime import datetime
 
@@ -13,31 +11,13 @@ from drivers.models import DriverProfile, DriverSlot
 from users.models import User
 from catalog.services import validate_service_pincode
 
-from .exceptions import IdempotencyConflict, NoSlotAvailable
-from .models import Booking, BookingRequest
+from .exceptions import NoSlotAvailable
+from .models import Booking
 from .capacity import (
     CONFIRMATION_WINDOW,
     SLOT_CAPACITY,
     reserved_driver_slots,
 )
-
-
-def get_booking_request(*, customer, key, payload, role):
-    """Call within the transaction that creates the booking and stores its response."""
-    fingerprint = hashlib.sha256(
-        json.dumps(
-            {"payload": payload, "role": role},
-            sort_keys=True,
-            separators=(",", ":"),
-        ).encode()
-    ).hexdigest()
-    attempt, _ = BookingRequest.objects.get_or_create(
-        customer=customer, key=key, defaults={"fingerprint": fingerprint}
-    )
-    attempt = BookingRequest.objects.select_for_update().get(pk=attempt.pk)
-    if attempt.fingerprint != fingerprint:
-        raise IdempotencyConflict()
-    return attempt
 
 
 def drivers_serving_pincode(pincode):

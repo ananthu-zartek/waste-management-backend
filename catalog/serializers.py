@@ -1,5 +1,6 @@
 from rest_framework import serializers
 from django.core.exceptions import ValidationError as DjangoValidationError
+from django.db import transaction
 from django.utils import timezone
 from .services import validate_service_pincode
 
@@ -81,27 +82,23 @@ class TimeSlotSerializer(serializers.ModelSerializer):
 
 
 class WasteSubCategorySerializer(serializers.ModelSerializer):
-    price_per_kg = serializers.DecimalField(
-        source="category.price_per_kg", max_digits=10, decimal_places=2, read_only=True
-    )
-
     class Meta:
         model = WasteSubCategory
         fields = [
             "id",
             "category",
             "name",
-            "price_per_kg",
             "is_active",
         ]
         read_only_fields = ["id"]
 
 
+class NestedWasteSubCategorySerializer(WasteSubCategorySerializer):
+    category = serializers.PrimaryKeyRelatedField(read_only=True)
+
+
 class WasteCategorySerializer(serializers.ModelSerializer):
-    subcategories = WasteSubCategorySerializer(
-        many=True,
-        read_only=True,
-    )
+    subcategories = NestedWasteSubCategorySerializer(many=True, required=False)
 
     class Meta:
         model = WasteCategory
@@ -115,6 +112,20 @@ class WasteCategorySerializer(serializers.ModelSerializer):
             "subcategories",
         ]
         read_only_fields = ["id"]
+
+    def validate_subcategories(self, value):
+        names = [item["name"] for item in value]
+        if len(names) != len(set(names)):
+            raise serializers.ValidationError("Subcategory names must be unique.")
+        return value
+
+    @transaction.atomic
+    def create(self, validated_data):
+        subcategories = validated_data.pop("subcategories", [])
+        category = WasteCategory.objects.create(**validated_data)
+        for subcategory in subcategories:
+            WasteSubCategory.objects.create(category=category, **subcategory)
+        return category
 
 
 class WasteTypeSerializer(serializers.ModelSerializer):

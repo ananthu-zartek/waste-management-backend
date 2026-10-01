@@ -1,9 +1,11 @@
 from decimal import Decimal
 
 from django.core.exceptions import ValidationError as DjangoValidationError
+from django.db import transaction
 from rest_framework import serializers
 
 from catalog.models import ScrapMaterial, WasteSubCategory
+from customers.models import CustomerProfile
 from customers.serializers import AddressSerializer, CustomerProfileSerializer
 from drivers.serializers import DriverProfileSerializer
 from catalog.serializers import WasteSubCategorySerializer
@@ -85,7 +87,17 @@ class BookingCreateSerializer(serializers.ModelSerializer):
             "estimated_payout",
         ]
 
+    @transaction.atomic
     def create(self, validated_data):
+        user = self.context["request"].user
+        try:
+            customer = user.customer_profile
+        except CustomerProfile.DoesNotExist:
+            raise serializers.ValidationError(
+                {"customer": "A customer profile is required."}
+            )
+        validated_data["customer"] = customer
+        validated_data["source"] = Booking.BookingSource.CUSTOMER
         booking_type = validated_data.pop("booking_type")
         waste_items = validated_data.pop("waste_items", [])
         scrap_items = validated_data.pop("scrap_items", [])
@@ -95,20 +107,22 @@ class BookingCreateSerializer(serializers.ModelSerializer):
                     raise serializers.ValidationError(
                         "Waste bookings cannot contain scrap items."
                     )
-                return waste_services.create_waste_booking(
+                booking = waste_services.create_waste_booking(
                     waste_items=waste_items, **validated_data
                 )
-            if waste_items:
-                raise serializers.ValidationError(
-                    "Scrap bookings cannot contain waste items."
+            else:
+                if waste_items:
+                    raise serializers.ValidationError(
+                        "Scrap bookings cannot contain waste items."
+                    )
+                booking = scrap_services.create_scrap_booking(
+                    scrap_items=scrap_items, **validated_data
                 )
-            return scrap_services.create_scrap_booking(
-                scrap_items=scrap_items, **validated_data
-            )
         except DjangoValidationError as exc:
             raise serializers.ValidationError(
                 getattr(exc, "message_dict", exc.messages)
             )
+        return booking
 
 
 class BookingWasteItemSerializer(serializers.ModelSerializer):

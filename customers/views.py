@@ -18,7 +18,3 @@ class AddressViewSet(UserScopedQuerysetMixin, viewsets.ModelViewSet):
     ).order_by("-is_default", "id")
     serializer_class = AddressSerializer
     user_lookup = "customer__user"
-
-    def perform_create(self, serializer):
-        customer_profile = self.request.user.customer_profile
-        serializer.save(customer=customer_profile)

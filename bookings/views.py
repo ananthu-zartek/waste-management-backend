@@ -1,18 +1,14 @@
-import json
 
 from django.core.exceptions import ValidationError as DjangoValidationError
-from django.db import transaction
 from django.db.models import CharField
 from django.db.models.functions import Cast
 from django_filters.rest_framework import DjangoFilterBackend
-from rest_framework import status, viewsets
+from rest_framework import viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.filters import SearchFilter
-from rest_framework.renderers import JSONRenderer
 from rest_framework.response import Response
 
-from customers.models import CustomerProfile
 from users.models import User
 
 from . import scrap_services, waste_services
@@ -31,7 +27,7 @@ from .serializers import (
     ScrapBookingSerializer,
     ScrapQuoteSerializer,
 )
-from .services import cancel_booking, confirm_booking, get_booking_request
+from .services import cancel_booking, confirm_booking
 
 
 class BookingViewSet(UserScopedQuerysetMixin, viewsets.ModelViewSet):
@@ -79,39 +75,6 @@ class BookingViewSet(UserScopedQuerysetMixin, viewsets.ModelViewSet):
         if self.action == "create":
             return BookingCreateSerializer
         return BookingSerializer
-
-    @transaction.atomic
-    def create(self, request, *args, **kwargs):
-        user = request.user
-        key = request.headers.get("Idempotency-Key", "").strip()
-        if not key or len(key) > 128:
-            raise ValidationError(
-                "Supply an Idempotency-Key header of 1 to 128 characters."
-            )
-        try:
-            customer = user.customer_profile
-        except CustomerProfile.DoesNotExist:
-            raise ValidationError({"customer": "A customer profile is required."})
-        attempt = get_booking_request(
-            customer=customer, key=key, payload=request.data, role=user.user_type
-        )
-        if attempt.response is not None:
-            return Response(attempt.response, status=status.HTTP_201_CREATED)
-        serializer = self.get_serializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        booking = serializer.save(
-            customer=customer,
-            source=(
-                Booking.BookingSource.ADMIN
-                if user.user_type == User.UserType.ADMIN
-                else Booking.BookingSource.CUSTOMER
-            ),
-        )
-        data = BookingSerializer(booking, context=self.get_serializer_context()).data
-        attempt.booking = booking
-        attempt.response = json.loads(JSONRenderer().render(data))
-        attempt.save(update_fields=["booking", "response", "updated_at"])
-        return Response(data, status=status.HTTP_201_CREATED)
 
     @action(detail=True, methods=["post"])
     def confirm(self, request, pk=None):

@@ -6,10 +6,7 @@ from .models import (
     BookingWasteItem,
     ScrapBooking,
     ScrapBookingItem,
-    BookingRequest,
 )
-
-admin.site.register(BookingRequest)
 
 
 @admin.register(Booking)

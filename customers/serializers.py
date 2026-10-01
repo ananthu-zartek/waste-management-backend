@@ -55,6 +55,10 @@ class AddressSerializer(serializers.ModelSerializer):
     user = UserSerializer(source="customer.user", read_only=True)
     pincode = serializers.PrimaryKeyRelatedField(queryset=ServicePincode.objects.all())
 
+    def create(self, validated_data):
+        validated_data["customer"] = self.context["request"].user.customer_profile
+        return super().create(validated_data)
+
     def validate_pincode(self, value):
         if not value.is_active or not value.service_area.is_active:
             raise serializers.ValidationError(
