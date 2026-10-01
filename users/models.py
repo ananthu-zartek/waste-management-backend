@@ -10,7 +10,6 @@ class User(AbstractBaseUser, PermissionsMixin):
         CUSTOMER = "customer", "Customer"
         DRIVER = "driver", "Driver"
 
-    
     phone_number = PhoneNumberField(unique=True)
     user_type = models.CharField(
         max_length=20,
@@ -25,7 +24,7 @@ class User(AbstractBaseUser, PermissionsMixin):
     REQUIRED_FIELDS = []
 
     def __str__(self):
-        return str(self.phone_number)
+        return f"{self.phone_number} - {self.user_type}"
 
 
 class TimeStampedModel(models.Model):

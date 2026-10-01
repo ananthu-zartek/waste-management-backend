@@ -14,7 +14,7 @@ class ServicePincodeInline(admin.TabularInline):
 
 @admin.register(ServiceArea)
 class ServiceAreaAdmin(admin.ModelAdmin):
-    list_display = ("name", "is_active")
+    list_display = ("id", "name", "is_active")
     list_filter = ("is_active",)
     search_fields = ("name",)
     inlines = (ServicePincodeInline,)
@@ -22,7 +22,7 @@ class ServiceAreaAdmin(admin.ModelAdmin):
 
 @admin.register(ServicePincode)
 class ServicePincodeAdmin(admin.ModelAdmin):
-    list_display = ("pincode", "area_name", "service_area", "is_active")
+    list_display = ("id", "pincode", "area_name", "service_area", "is_active")
     list_filter = ("service_area", "is_active")
     search_fields = ("pincode", "area_name", "service_area__name")
     autocomplete_fields = ("service_area",)

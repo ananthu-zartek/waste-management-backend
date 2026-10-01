@@ -17,6 +17,7 @@ class AddressAdmin(admin.ModelAdmin):
     list_display = (
         "id",
         "customer",
+        "customer__name",
         "address_type",
         "house_no",
         "area",

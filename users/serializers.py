@@ -1,8 +1,11 @@
+from django.db import transaction
 from phonenumber_field.serializerfields import PhoneNumberField
 from rest_framework import serializers
+from rest_framework.exceptions import PermissionDenied
 from rest_framework_simplejwt.exceptions import TokenError
 from rest_framework_simplejwt.tokens import RefreshToken
 
+from customers.models import CustomerProfile
 from .models import User
 
 STATIC_OTP = "123456"
@@ -21,6 +24,28 @@ class OTPRequestSerializer(serializers.Serializer):
         required=True,
         write_only=True,
     )
+
+    @transaction.atomic
+    def create(self, validated_data):
+        user, self.created = User.objects.get_or_create(
+            phone_number=validated_data["phone_number"],
+            defaults={"user_type": validated_data["user_type"]},
+        )
+        if not user.is_active:
+            raise PermissionDenied("This account is inactive.")
+        if not self.created and user.user_type != validated_data["user_type"]:
+            raise serializers.ValidationError(
+                {
+                    "user_type": (
+                        "This phone number already has a "
+                        f"{user.get_user_type_display().lower()} account."
+                    )
+                }
+            )
+
+        if self.created and validated_data["user_type"] == User.UserType.CUSTOMER:
+            CustomerProfile.objects.create(user=user)
+        return user
 
 
 class VerifyOTPSerializer(serializers.Serializer):

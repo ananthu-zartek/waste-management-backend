@@ -33,15 +33,10 @@ class UserViewSet(AllowAnyMixin, viewsets.ModelViewSet):
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        phone_number = serializer.validated_data["phone_number"]
-        user_type = serializer.validated_data["user_type"]
-        _, created = User.objects.get_or_create(
-            phone_number=phone_number,
-            defaults={
-                "user_type": user_type,
-            },
+        serializer.save()
+        response_status = (
+            status.HTTP_201_CREATED if serializer.created else status.HTTP_200_OK
         )
-        response_status = status.HTTP_201_CREATED if created else status.HTTP_200_OK
         return Response(
             {"detail": "OTP Sent.", "otp": STATIC_OTP},
             status=response_status,

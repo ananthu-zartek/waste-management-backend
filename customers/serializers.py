@@ -1,7 +1,6 @@
 from rest_framework import serializers
-from django.core.exceptions import ValidationError as DjangoValidationError
-from catalog.services import validate_service_pincode
 from catalog.models import ServicePincode
+from bookings.models import Booking
 
 from .models import Address, CustomerProfile
 from users.serializers import UserSerializer
@@ -17,27 +16,14 @@ class CustomerProfileSerializer(serializers.ModelSerializer):
 
 class AddressSerializer(serializers.ModelSerializer):
     user = UserSerializer(source="customer.user", read_only=True)
-    pincode = serializers.SlugRelatedField(
-        slug_field="pincode",
-        queryset=ServicePincode.objects.filter(
-            is_active=True, service_area__is_active=True
-        ),
-    )
+    pincode = serializers.PrimaryKeyRelatedField(queryset=ServicePincode.objects.all())
 
-    def validate(self, attrs):
-        pincode = attrs.get("pincode", self.instance.pincode if self.instance else None)
-        if pincode is not None:
-            try:
-                validate_service_pincode(pincode.pincode)
-            except DjangoValidationError as exc:
-                raise serializers.ValidationError(exc.message_dict) from exc
-        if (
-            self.instance
-            and "pincode" in attrs
-            and attrs["pincode"] != self.instance.pincode
-        ):
-            from bookings.models import Booking
-
+    def validate_pincode(self, value):
+        if not value.is_active or not value.service_area.is_active:
+            raise serializers.ValidationError(
+                "Service is not available for this pincode."
+            )
+        if self.instance and value != self.instance.pincode:
             if self.instance.bookings.exclude(
                 status__in=[
                     Booking.BookingStatus.COMPLETED,
@@ -46,11 +32,9 @@ class AddressSerializer(serializers.ModelSerializer):
                 ]
             ).exists():
                 raise serializers.ValidationError(
-                    {
-                        "pincode": "Cannot change the pincode while this address has active bookings."
-                    }
+                    "Cannot change the pincode while this address has active bookings."
                 )
-        return attrs
+        return value
 
     class Meta:
         model = Address
@@ -62,4 +46,5 @@ class AddressSerializer(serializers.ModelSerializer):
             "area",
             "city",
             "pincode",
+            "is_default",
         ]

@@ -51,7 +51,7 @@ INSTALLED_APPS = [
     # Local apps
     "users.apps.UsersConfig",
     "catalog",
-    "customers",
+    "customers.apps.CustomersConfig",
     "drivers",
     "bookings.apps.BookingsConfig",
 ]
