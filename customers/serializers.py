@@ -1,17 +1,54 @@
 from rest_framework import serializers
 from catalog.models import ServicePincode
 from bookings.models import Booking
-
+from users.models import User
 from .models import Address, CustomerProfile
 from users.serializers import UserSerializer
 
 
 class CustomerProfileSerializer(serializers.ModelSerializer):
-    user = UserSerializer(read_only=True)
+    phone_number = serializers.CharField(
+        source="user.phone_number",
+        required=False,
+    )
+    user_type = serializers.CharField(
+        source="user.user_type",
+        read_only=True,
+    )
+    created_at = serializers.DateTimeField(
+        source="user.created_at",
+        read_only=True,
+    )
 
     class Meta:
         model = CustomerProfile
-        fields = ["id", "user", "name", "email"]
+        fields = (
+            "id",
+            "phone_number",
+            "user_type",
+            "created_at",
+            "name",
+            "email",
+        )
+        read_only_fields = (
+            "id",
+            "user_type",
+            "created_at",
+        )
+
+    def validate_phone_number(self, phone_number):
+        users = User.objects.filter(phone_number=phone_number)
+        if self.instance:
+            users = users.exclude(pk=self.instance.user_id)
+        if users.exists():
+            raise serializers.ValidationError("Phone number already exists.")
+        return phone_number
+
+    def update(self, instance, validated_data):
+        user_data = validated_data.pop("user", None)
+        if user_data:
+            User.objects.filter(pk=instance.user_id).update(**user_data)
+        return super().update(instance, validated_data)
 
 
 class AddressSerializer(serializers.ModelSerializer):

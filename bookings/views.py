@@ -1,43 +1,61 @@
 import json
 
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import transaction
 from django.db.models import CharField
 from django.db.models.functions import Cast
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import status, viewsets
-from rest_framework.renderers import JSONRenderer
-from rest_framework.filters import SearchFilter
 from rest_framework.decorators import action
-from rest_framework.response import Response
 from rest_framework.exceptions import PermissionDenied, ValidationError
-from django.core.exceptions import ValidationError as DjangoValidationError
+from rest_framework.filters import SearchFilter
+from rest_framework.renderers import JSONRenderer
+from rest_framework.response import Response
 
-from users.models import User
 from customers.models import CustomerProfile
-from .services import cancel_booking, confirm_booking, get_booking_request
+from users.models import User
+
+from . import scrap_services, waste_services
 from .filters import BookingFilter
-from .models import (
-    Booking,
-    BookingWasteItem,
-    ScrapBooking,
-    ScrapBookingItem,
-)
+from .mixins import UserScopedQuerysetMixin
+from .models import Booking, BookingWasteItem, ScrapBooking, ScrapBookingItem
+from .scrap_services import quote_scrap
 from .serializers import (
-    BookingSerializer,
-    BookingCreateSerializer,
     BookingCancelSerializer,
-    BookingWasteItemSerializer,
+    BookingCreateSerializer,
+    BookingSerializer,
     BookingWasteItemCreateSerializer,
-    ScrapBookingSerializer,
-    ScrapBookingItemSerializer,
+    BookingWasteItemSerializer,
     ScrapBookingItemCreateSerializer,
+    ScrapBookingItemSerializer,
+    ScrapBookingSerializer,
     ScrapQuoteSerializer,
 )
-from .scrap_services import quote_scrap
-from . import waste_services, scrap_services
+from .services import cancel_booking, confirm_booking, get_booking_request
 
 
-class BookingViewSet(viewsets.ModelViewSet):
+class BookingViewSet(UserScopedQuerysetMixin, viewsets.ModelViewSet):
+    queryset = (
+        Booking.objects.select_related(
+            "customer",
+            "customer__user",
+            "driver",
+            "driver__user",
+            "address",
+            "address__customer__user",
+            "address__pincode",
+            "slot",
+            "scrap_booking",
+        )
+        .prefetch_related(
+            "waste_items__subcategory__category",
+            "scrap_booking__items__material",
+        )
+        .annotate(search_id=Cast("id", output_field=CharField()))
+        .order_by("scheduled_date", "slot__start_time", "pk")
+    )
+    customer_lookup = "customer__user"
+    driver_lookup = "driver__user"
     serializer_class = BookingSerializer
     filter_backends = [DjangoFilterBackend, SearchFilter]
     filterset_class = BookingFilter
@@ -51,6 +69,7 @@ class BookingViewSet(viewsets.ModelViewSet):
         "search_id",
     ]
     http_method_names = ["get", "post", "patch", "head", "options"]
+
     def filter_queryset(self, queryset):
         if self.action == "list":
             return super().filter_queryset(queryset)
@@ -136,37 +155,12 @@ class BookingViewSet(viewsets.ModelViewSet):
             }
         )
 
-    def get_queryset(self):
-        queryset = (
-            Booking.objects.select_related(
-                "customer",
-                "customer__user",
-                "driver",
-                "driver__user",
-                "address",
-                "address__customer__user",
-                "address__pincode",
-                "slot",
-                "scrap_booking",
-            )
-            .prefetch_related(
-                "waste_items__subcategory__category",
-                "scrap_booking__items__material",
-            )
-            .annotate(search_id=Cast("id", output_field=CharField()))
-            .order_by("scheduled_date", "slot__start_time", "pk")
-        )
-        user = self.request.user
-        if user.user_type == User.UserType.ADMIN:
-            return queryset
-        if user.user_type == User.UserType.CUSTOMER:
-            return queryset.filter(customer__user=user)
-        if user.user_type == User.UserType.DRIVER:
-            return queryset.filter(driver__user=user)
-        return queryset.none()
 
-
-class BookingWasteItemViewSet(viewsets.ModelViewSet):
+class BookingWasteItemViewSet(UserScopedQuerysetMixin, viewsets.ModelViewSet):
+    queryset = BookingWasteItem.objects.select_related(
+        "booking", "subcategory__category"
+    )
+    customer_lookup = "booking__customer__user"
     serializer_class = BookingWasteItemSerializer
 
     def get_serializer_class(self):
@@ -177,34 +171,20 @@ class BookingWasteItemViewSet(viewsets.ModelViewSet):
     def perform_destroy(self, instance):
         waste_services.delete_item(instance)
 
-    def get_queryset(self):
-        queryset = BookingWasteItem.objects.select_related(
-            "booking", "subcategory__category"
-        )
-        user = self.request.user
-        if user.user_type == User.UserType.ADMIN:
-            return queryset
-        if user.user_type == User.UserType.CUSTOMER:
-            return queryset.filter(booking__customer__user=user)
-        return queryset.none()
 
-
-class ScrapBookingViewSet(viewsets.ReadOnlyModelViewSet):
+class ScrapBookingViewSet(UserScopedQuerysetMixin, viewsets.ReadOnlyModelViewSet):
+    queryset = ScrapBooking.objects.select_related("booking").prefetch_related(
+        "items__material"
+    )
+    customer_lookup = "booking__customer__user"
     serializer_class = ScrapBookingSerializer
 
-    def get_queryset(self):
-        queryset = ScrapBooking.objects.select_related("booking").prefetch_related(
-            "items__material"
-        )
-        user = self.request.user
-        if user.user_type == User.UserType.ADMIN:
-            return queryset
-        if user.user_type == User.UserType.CUSTOMER:
-            return queryset.filter(booking__customer__user=user)
-        return queryset.none()
 
-
-class ScrapBookingItemViewSet(viewsets.ModelViewSet):
+class ScrapBookingItemViewSet(UserScopedQuerysetMixin, viewsets.ModelViewSet):
+    queryset = ScrapBookingItem.objects.select_related(
+        "scrap_booking", "scrap_booking__booking", "material"
+    )
+    customer_lookup = "scrap_booking__booking__customer__user"
     serializer_class = ScrapBookingItemSerializer
 
     def get_serializer_class(self):
@@ -214,14 +194,3 @@ class ScrapBookingItemViewSet(viewsets.ModelViewSet):
 
     def perform_destroy(self, instance):
         scrap_services.delete_item(instance)
-
-    def get_queryset(self):
-        queryset = ScrapBookingItem.objects.select_related(
-            "scrap_booking", "scrap_booking__booking", "material"
-        )
-        user = self.request.user
-        if user.user_type == User.UserType.ADMIN:
-            return queryset
-        if user.user_type == User.UserType.CUSTOMER:
-            return queryset.filter(scrap_booking__booking__customer__user=user)
-        return queryset.none()

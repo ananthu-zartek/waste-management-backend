@@ -2,41 +2,47 @@ from django.db import transaction
 from phonenumber_field.serializerfields import PhoneNumberField
 from rest_framework import serializers
 from catalog.models import ServicePincode
+from catalog.serializers import ServicePincodeSerializer
 
 from users.models import User
-from users.serializers import UserSerializer
-
 from .models import DriverProfile
 
 
 class DriverProfileSerializer(serializers.ModelSerializer):
-    user = UserSerializer(read_only=True)
-    phone_number = PhoneNumberField(write_only=True, required=True)
-    service_pincodes = serializers.SlugRelatedField(
+    phone_number = PhoneNumberField(source="user.phone_number", required=True)
+    user_type = serializers.CharField(source="user.user_type", read_only=True)
+    service_pincodes = serializers.PrimaryKeyRelatedField(
         many=True,
-        slug_field="pincode",
         required=False,
         queryset=ServicePincode.objects.filter(
-            is_active=True, service_area__is_active=True
+            is_active=True,
+            service_area__is_active=True,
         ),
+        write_only=True,
+    )
+    service_pincode_details = ServicePincodeSerializer(
+        source="service_pincodes",
+        many=True,
+        read_only=True,
     )
 
     class Meta:
         model = DriverProfile
         fields = [
             "id",
-            "user",
             "phone_number",
+            "user_type",
             "name",
             "email",
             "license_number",
             "vehicle_number",
             "is_available",
             "service_pincodes",
+            "service_pincode_details",
             "created_at",
             "updated_at",
         ]
-        read_only_fields = ["id", "created_at", "updated_at"]
+        read_only_fields = ["id", "user_type", "created_at", "updated_at"]
 
     def validate_phone_number(self, phone_number):
         users = User.objects.filter(phone_number=phone_number)
@@ -50,7 +56,7 @@ class DriverProfileSerializer(serializers.ModelSerializer):
 
     @transaction.atomic
     def create(self, validated_data):
-        phone_number = validated_data.pop("phone_number")
+        phone_number = validated_data.pop("user")["phone_number"]
         pincodes = validated_data.pop("service_pincodes", [])
         user = User.objects.create_user(
             phone_number=phone_number, user_type=User.UserType.DRIVER
@@ -62,8 +68,7 @@ class DriverProfileSerializer(serializers.ModelSerializer):
     @transaction.atomic
     def update(self, instance, validated_data):
         instance = DriverProfile.objects.select_for_update().get(pk=instance.pk)
-        phone_number = validated_data.pop("phone_number", None)
-        if phone_number is not None:
-            instance.user.phone_number = phone_number
-            instance.user.save(update_fields=["phone_number"])
+        user_data = validated_data.pop("user", None)
+        if user_data:
+            User.objects.filter(pk=instance.user_id).update(**user_data)
         return super().update(instance, validated_data)

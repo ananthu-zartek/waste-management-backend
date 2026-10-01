@@ -1,5 +1,5 @@
 from celery import shared_task
-from django.db import OperationalError, transaction
+from django.db import transaction
 from django.utils import timezone
 
 from drivers.models import DriverSlot
@@ -8,14 +8,7 @@ from .capacity import CONFIRMATION_WINDOW
 from .models import Booking
 
 
-@shared_task(
-    autoretry_for=(OperationalError,),
-    retry_backoff=True,
-    retry_jitter=True,
-    max_retries=5,
-    soft_time_limit=240,
-    time_limit=270,
-)
+@shared_task
 def expire_pending_bookings():
     """Release overdue holds, locking the same booking row as confirmation."""
     cutoff = timezone.now() - CONFIRMATION_WINDOW
@@ -27,7 +20,6 @@ def expire_pending_bookings():
                 .filter(
                     source=Booking.BookingSource.CUSTOMER,
                     status=Booking.BookingStatus.PENDING,
-                    recurring_booking__isnull=True,
                     created_at__lte=cutoff,
                 )
                 .order_by("pk")

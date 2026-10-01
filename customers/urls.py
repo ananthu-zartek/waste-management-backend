@@ -1,8 +1,8 @@
-from django.urls import include, path
 from rest_framework.routers import DefaultRouter
 
-from .views import AddressViewSet
+from .views import CustomerProfileViewSet, AddressViewSet
 
 router = DefaultRouter()
 router.register("addresses", AddressViewSet, basename="address")
+router.register("profiles", CustomerProfileViewSet, basename="profiles")
 urlpatterns = router.urls
