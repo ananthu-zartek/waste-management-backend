@@ -1,7 +1,7 @@
 from django.db import models
 
 from users.models import TimeStampedModel
-
+from django.utils import timezone
 
 class Booking(TimeStampedModel):
     class BookingType(models.TextChoices):
@@ -85,6 +85,15 @@ class Booking(TimeStampedModel):
             models.Index(fields=["customer", "scheduled_date"], name="booking_customer_date_idx"),
             models.Index(fields=["driver", "scheduled_date"], name="booking_driver_date_idx"),
         ]
+
+    def save(self, *args, **kwargs):
+        if self.status == self.BookingStatus.CONFIRMED and self.confirmed_at is None:
+            self.confirmed_at = timezone.now()
+
+        if self.status == self.BookingStatus.CANCELLED and self.cancelled_at is None:
+            self.cancelled_at = timezone.now()
+
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return f"Booking {self.pk} - {self.customer} - {self.scheduled_date}"

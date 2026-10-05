@@ -3,7 +3,7 @@ from datetime import timedelta
 from drivers.models import DriverSlot
 from .models import Booking
 
-CONFIRMATION_WINDOW = timedelta(minutes=30)
+CONFIRMATION_WINDOW = timedelta(minutes=90)
 CAPACITY_STATUSES = (
     Booking.BookingStatus.PENDING,
     Booking.BookingStatus.ASSIGNED,

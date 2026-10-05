@@ -2,6 +2,7 @@ from decimal import Decimal
 
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import transaction
+from django.utils import timezone
 from rest_framework import serializers
 
 from catalog.models import ScrapMaterial, WasteSubCategory
@@ -17,6 +18,7 @@ from .models import (
     ScrapBookingItem,
 )
 from . import waste_services, scrap_services
+from .capacity import CONFIRMATION_WINDOW
 
 
 class WasteItemInputSerializer(serializers.Serializer):
@@ -216,10 +218,6 @@ class ScrapBookingSerializer(serializers.ModelSerializer):
         read_only_fields = ["id", "created_at", "updated_at"]
 
 
-class BookingCancelSerializer(serializers.Serializer):
-    other_notes = serializers.CharField(required=False, allow_blank=True)
-
-
 class BookingSlotSerializer(serializers.Serializer):
     start_time = serializers.TimeField()
     end_time = serializers.TimeField()
@@ -235,6 +233,20 @@ class BookingSerializer(serializers.ModelSerializer):
     )
     slot_details = BookingSlotSerializer(source="slot", read_only=True)
     reference = serializers.SerializerMethodField()
+
+    def validate(self, attrs):
+        instance = self.instance
+        if (
+            instance
+            and attrs.get("status") == instance.BookingStatus.CONFIRMED
+            and instance.status != instance.BookingStatus.CONFIRMED
+            and timezone.now() >= instance.created_at + CONFIRMATION_WINDOW
+        ):
+            raise serializers.ValidationError(
+                {"error": "Booking confirmation window has expired."}
+            )
+
+        return attrs
 
     class Meta:
         model = Booking
@@ -264,7 +276,6 @@ class BookingSerializer(serializers.ModelSerializer):
             "slot_details",
             "reference",
         ]
-        read_only_fields = [field for field in fields if field != "note"]
 
     def get_reference(self, booking):
         return f"WKL-{booking.created_at.year}-{booking.pk:04d}"

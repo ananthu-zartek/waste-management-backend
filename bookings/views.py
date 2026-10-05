@@ -1,4 +1,3 @@
-
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import transaction
 from django.db.models import CharField
@@ -17,7 +16,6 @@ from .mixins import UserScopedQuerysetMixin
 from .models import Booking, BookingWasteItem, ScrapBooking, ScrapBookingItem
 from .scrap_services import quote_scrap
 from .serializers import (
-    BookingCancelSerializer,
     BookingCreateSerializer,
     BookingSerializer,
     BookingWasteItemCreateSerializer,
@@ -27,7 +25,6 @@ from .serializers import (
     ScrapBookingSerializer,
     ScrapQuoteSerializer,
 )
-from .services import cancel_booking, confirm_booking
 
 
 class BookingViewSet(UserScopedQuerysetMixin, viewsets.ModelViewSet):
@@ -75,22 +72,6 @@ class BookingViewSet(UserScopedQuerysetMixin, viewsets.ModelViewSet):
         if self.action == "create":
             return BookingCreateSerializer
         return BookingSerializer
-
-    @action(detail=True, methods=["post"])
-    def confirm(self, request, pk=None):
-        booking = self.get_object()
-        with transaction.atomic():
-            confirm_booking(booking_id=booking.pk, customer_id=booking.customer_id)
-        return Response(self.get_serializer(self.get_object()).data)
-
-    @action(detail=True, methods=["post"])
-    def cancel(self, request, pk=None):
-        booking = self.get_object()
-        serializer = BookingCancelSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        with transaction.atomic():
-            cancel_booking(booking_id=booking.pk, **serializer.validated_data)
-        return Response(self.get_serializer(self.get_object()).data)
 
     @action(detail=False, methods=["post"])
     def quote(self, request):

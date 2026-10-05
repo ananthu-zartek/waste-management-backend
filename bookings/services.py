@@ -3,18 +3,15 @@ from datetime import datetime
 
 from django.core.exceptions import ValidationError
 from django.db.models import Count
-from django.http import Http404
 from django.utils import timezone
 
 from drivers.models import DriverProfile, DriverSlot
 from users.models import User
 from catalog.models import TimeSlot
-from catalog.services import validate_service_pincode
 
 from .exceptions import NoSlotAvailable, NoDriversAvailable
 from .models import Booking
 from .capacity import (
-    CONFIRMATION_WINDOW,
     occupied_slot_capacity,
 )
 
@@ -130,67 +127,4 @@ def create_booking(
         date=scheduled_date,
         booking=booking,
     )
-    return booking
-
-
-def confirm_booking(*, booking_id, customer_id):
-    try:
-        booking = Booking.objects.select_for_update().get(
-            pk=booking_id,
-            customer_id=customer_id,
-            source=Booking.BookingSource.CUSTOMER,
-        )
-    except Booking.DoesNotExist as exc:
-        raise Http404("Booking not found.") from exc
-    if booking.status != Booking.BookingStatus.PENDING:
-        raise ValidationError("Booking cannot be confirmed.")
-    reservation = DriverSlot.objects.filter(booking=booking).first()
-    if reservation is None:
-        raise ValidationError("Booking has no reserved capacity.")
-    if reservation.driver_id != booking.driver_id:
-        raise ValidationError(
-            {"driver": "The booking driver does not match its reservation."}
-        )
-    if booking.address.pincode_id is None:
-        raise ValidationError(
-            {"address": "Select a supported pincode for this address."}
-        )
-    validate_service_pincode(booking.address.pincode.pincode, booking.driver)
-    now = timezone.now()
-    if now >= booking.created_at + CONFIRMATION_WINDOW:
-        raise ValidationError("Booking confirmation window has expired.")
-    booking.status = Booking.BookingStatus.CONFIRMED
-    booking.confirmed_at = now
-    booking.save(update_fields=["status", "confirmed_at", "updated_at"])
-    return booking
-
-
-def cancel_booking(*, booking_id, other_notes=None):
-    """Keep the booking history and release its occupied customer capacity."""
-    try:
-        booking = Booking.objects.select_for_update().get(pk=booking_id)
-    except Booking.DoesNotExist as exc:
-        raise Http404("Booking not found.") from exc
-    if booking.status == Booking.BookingStatus.COMPLETED:
-        raise ValidationError("Completed bookings cannot be cancelled.")
-    if booking.status == Booking.BookingStatus.EXPIRED:
-        raise ValidationError("Expired bookings cannot be cancelled.")
-    driver_slot = DriverSlot.objects.filter(booking=booking).first()
-    if driver_slot:
-        DriverProfile.objects.select_for_update().get(pk=driver_slot.driver_id)
-    update_fields = []
-    if (
-        booking.status != Booking.BookingStatus.CANCELLED
-        or booking.cancelled_at is None
-    ):
-        booking.status = Booking.BookingStatus.CANCELLED
-        booking.cancelled_at = timezone.now()
-        update_fields.extend(["status", "cancelled_at"])
-    if other_notes is not None:
-        booking.other_notes = other_notes
-        update_fields.append("other_notes")
-    if update_fields:
-        booking.save(update_fields=[*update_fields, "updated_at"])
-    if driver_slot:
-        driver_slot.delete()
     return booking
