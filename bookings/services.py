@@ -12,13 +12,17 @@ from users.models import User
 from catalog.models import TimeSlot
 from catalog.services import validate_service_pincode
 
-from .exceptions import NoSlotAvailable
+from .exceptions import NoSlotAvailable, NoDriversAvailable
 from .models import Booking
 from .capacity import (
     CONFIRMATION_WINDOW,
     occupied_slot_capacity,
-    reserved_driver_slots,
 )
+
+
+def slot_is_future(slot, scheduled_date):
+    slot_start = timezone.make_aware(datetime.combine(scheduled_date, slot.start_time))
+    return slot_start > timezone.now()
 
 
 def drivers_serving_pincode(pincode):
@@ -32,19 +36,16 @@ def drivers_serving_pincode(pincode):
     ).distinct()
 
 
-def assign_driver(*, slot, scheduled_date, pincode, driver_id=None):
-    """Choose a least-loaded eligible driver while the caller holds the slot lock."""
-    candidate_ids = list(
-        drivers_serving_pincode(pincode)
-        .filter(**({"pk": driver_id} if driver_id is not None else {}))
-        .values_list("pk", flat=True)
-    )
+def assign_driver(slot, scheduled_date, pincode):
+    candidate_ids = list(drivers_serving_pincode(pincode).values_list("pk", flat=True))
     if not candidate_ids:
         return None
-
     reservations = (
-        reserved_driver_slots()
-        .filter(driver_id__in=candidate_ids, slot=slot, date=scheduled_date)
+        DriverSlot.objects.filter(
+            driver_id__in=candidate_ids,
+            slot=slot,
+            date=scheduled_date,
+        )
         .values("driver_id")
         .annotate(count=Count("pk"))
     )
@@ -60,24 +61,21 @@ def assign_driver(*, slot, scheduled_date, pincode, driver_id=None):
         ]
         chosen_id = random.choice(least_loaded_ids)
         try:
-            chosen = DriverProfile.objects.select_for_update(
-                of=("self",), no_key=True
-            ).get(pk=chosen_id)
+            driver = DriverProfile.objects.select_for_update(of=("self",)).get(
+                pk=chosen_id
+            )
         except DriverProfile.DoesNotExist:
             candidate_ids.remove(chosen_id)
             continue
+
         if drivers_serving_pincode(pincode).filter(pk=chosen_id).exists():
-            return chosen
+            return driver
+
         candidate_ids.remove(chosen_id)
     return None
 
 
-def slot_is_future(slot, scheduled_date):
-    slot_start = timezone.make_aware(datetime.combine(scheduled_date, slot.start_time))
-    return slot_start > timezone.now()
-
-
-@transaction.atomic
+@transaction.atomic(savepoint=False)
 def create_booking(
     *,
     customer,
@@ -88,38 +86,30 @@ def create_booking(
     estimated_weight=0,
     estimated_payout=0,
     note="",
-    driver_id=None,
     source=Booking.BookingSource.CUSTOMER,
 ):
     """Create a booking and reserve customer capacity atomically."""
+
     slot = TimeSlot.objects.select_for_update().get(pk=slot.pk)
+
     if not slot.is_active or not slot_is_future(slot, scheduled_date):
         raise ValidationError("Select an active, future time slot.")
+
     if occupied_slot_capacity(slot, scheduled_date) >= slot.capacity:
         raise NoSlotAvailable()
+
     if address.customer_id != customer.pk:
         raise ValidationError("The address must belong to the customer.")
+
     if address.pincode_id is None:
         raise ValidationError("Select a supported pincode for this address.")
-    pincode = address.pincode.pincode
-    if (
-        driver_id is not None
-        and not DriverProfile.objects.filter(pk=driver_id).exists()
-    ):
-        raise ValidationError("Select a valid driver.")
 
-    driver = None
-    if source == Booking.BookingSource.CUSTOMER or driver_id is not None:
-        driver = assign_driver(
-            slot=slot,
-            scheduled_date=scheduled_date,
-            pincode=pincode,
-            driver_id=driver_id,
-        )
-        if driver is None:
-            raise NoSlotAvailable()
-    else:
-        validate_service_pincode(pincode)
+    pincode = address.pincode.pincode
+
+    driver = assign_driver(slot, scheduled_date, pincode)
+    if driver is None:
+        raise NoDriversAvailable()
+
     now = timezone.now()
     booking = Booking(
         customer=customer,
@@ -129,11 +119,6 @@ def create_booking(
         scheduled_date=scheduled_date,
         booking_type=booking_type,
         source=source,
-        status=(
-            Booking.BookingStatus.PENDING
-            if source == Booking.BookingSource.CUSTOMER
-            else Booking.BookingStatus.CONFIRMED
-        ),
         assigned_at=now if driver is not None else None,
         confirmed_at=now if source == Booking.BookingSource.ADMIN else None,
         estimated_weight=estimated_weight,
@@ -141,10 +126,12 @@ def create_booking(
         estimated_payout=estimated_payout,
     )
     booking.save()
-    if driver is not None:
-        DriverSlot.objects.create(
-            driver=driver, slot=slot, date=scheduled_date, booking=booking
-        )
+    DriverSlot.objects.create(
+        driver=driver,
+        slot=slot,
+        date=scheduled_date,
+        booking=booking,
+    )
     return booking
 
 
