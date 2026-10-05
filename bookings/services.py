@@ -2,7 +2,6 @@ import random
 from datetime import datetime
 
 from django.core.exceptions import ValidationError
-from django.db import transaction
 from django.db.models import Count
 from django.http import Http404
 from django.utils import timezone
@@ -75,7 +74,6 @@ def assign_driver(slot, scheduled_date, pincode):
     return None
 
 
-@transaction.atomic(savepoint=False)
 def create_booking(
     *,
     customer,
@@ -88,7 +86,7 @@ def create_booking(
     note="",
     source=Booking.BookingSource.CUSTOMER,
 ):
-    """Create a booking and reserve customer capacity atomically."""
+    """Create a booking and reserve capacity inside the caller's transaction."""
 
     slot = TimeSlot.objects.select_for_update().get(pk=slot.pk)
 
@@ -135,7 +133,6 @@ def create_booking(
     return booking
 
 
-@transaction.atomic
 def confirm_booking(*, booking_id, customer_id):
     try:
         booking = Booking.objects.select_for_update().get(
@@ -168,7 +165,6 @@ def confirm_booking(*, booking_id, customer_id):
     return booking
 
 
-@transaction.atomic
 def cancel_booking(*, booking_id, other_notes=None):
     """Keep the booking history and release its occupied customer capacity."""
     try:

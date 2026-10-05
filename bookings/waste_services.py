@@ -1,7 +1,6 @@
 from decimal import Decimal, ROUND_HALF_UP
 
 from django.core.exceptions import ValidationError
-from django.db import transaction
 
 from .models import Booking, BookingWasteItem
 from .services import create_booking
@@ -24,7 +23,6 @@ def update_totals(booking):
     booking.save(update_fields=["estimated_weight", "estimated_payout", "updated_at"])
 
 
-@transaction.atomic
 def create_waste_booking(*, waste_items, **data):
     if not waste_items:
         raise ValidationError({"waste_items": "Select at least one waste item."})
@@ -36,7 +34,6 @@ def create_waste_booking(*, waste_items, **data):
     return booking
 
 
-@transaction.atomic
 def add_item(*, booking, subcategory, estimated_weight):
     booking = Booking.objects.select_for_update().get(
         pk=booking.pk, booking_type=Booking.BookingType.WASTE
@@ -48,7 +45,6 @@ def add_item(*, booking, subcategory, estimated_weight):
     return item
 
 
-@transaction.atomic
 def update_item(item, **changes):
     booking = Booking.objects.select_for_update().get(pk=item.booking_id)
     item = BookingWasteItem.objects.get(pk=item.pk)
@@ -60,7 +56,6 @@ def update_item(item, **changes):
     return item
 
 
-@transaction.atomic
 def delete_item(item):
     booking = Booking.objects.select_for_update().get(pk=item.booking_id)
     BookingWasteItem.objects.filter(pk=item.pk).delete()

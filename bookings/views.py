@@ -1,5 +1,6 @@
 
 from django.core.exceptions import ValidationError as DjangoValidationError
+from django.db import transaction
 from django.db.models import CharField
 from django.db.models.functions import Cast
 from django_filters.rest_framework import DjangoFilterBackend
@@ -78,7 +79,8 @@ class BookingViewSet(UserScopedQuerysetMixin, viewsets.ModelViewSet):
     @action(detail=True, methods=["post"])
     def confirm(self, request, pk=None):
         booking = self.get_object()
-        confirm_booking(booking_id=booking.pk, customer_id=booking.customer_id)
+        with transaction.atomic():
+            confirm_booking(booking_id=booking.pk, customer_id=booking.customer_id)
         return Response(self.get_serializer(self.get_object()).data)
 
     @action(detail=True, methods=["post"])
@@ -86,7 +88,8 @@ class BookingViewSet(UserScopedQuerysetMixin, viewsets.ModelViewSet):
         booking = self.get_object()
         serializer = BookingCancelSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        cancel_booking(booking_id=booking.pk, **serializer.validated_data)
+        with transaction.atomic():
+            cancel_booking(booking_id=booking.pk, **serializer.validated_data)
         return Response(self.get_serializer(self.get_object()).data)
 
     @action(detail=False, methods=["post"])
@@ -128,6 +131,7 @@ class BookingWasteItemViewSet(UserScopedQuerysetMixin, viewsets.ModelViewSet):
             return BookingWasteItemCreateSerializer
         return BookingWasteItemSerializer
 
+    @transaction.atomic
     def perform_destroy(self, instance):
         waste_services.delete_item(instance)
 
@@ -152,5 +156,6 @@ class ScrapBookingItemViewSet(UserScopedQuerysetMixin, viewsets.ModelViewSet):
             return ScrapBookingItemCreateSerializer
         return ScrapBookingItemSerializer
 
+    @transaction.atomic
     def perform_destroy(self, instance):
         scrap_services.delete_item(instance)

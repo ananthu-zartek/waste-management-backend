@@ -1,4 +1,5 @@
 from django.contrib import admin
+from django.db import transaction
 from . import waste_services, scrap_services
 
 from .models import (
@@ -71,6 +72,7 @@ class BookingWasteItemAdmin(admin.ModelAdmin):
     def delete_model(self, request, obj):
         waste_services.delete_item(obj)
 
+    @transaction.atomic
     def delete_queryset(self, request, queryset):
         for item in queryset:
             waste_services.delete_item(item)
@@ -116,6 +118,7 @@ class ScrapBookingItemAdmin(admin.ModelAdmin):
     def delete_model(self, request, obj):
         scrap_services.delete_item(obj)
 
+    @transaction.atomic
     def delete_queryset(self, request, queryset):
         for item in queryset:
             scrap_services.delete_item(item)

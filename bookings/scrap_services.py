@@ -1,7 +1,6 @@
 from decimal import Decimal, ROUND_HALF_UP
 
 from django.core.exceptions import ValidationError
-from django.db import transaction
 from django.db.models import Sum
 
 from .models import Booking, ScrapBooking, ScrapBookingItem
@@ -42,7 +41,6 @@ def update_totals(booking):
     booking.save(update_fields=["estimated_weight", "estimated_payout", "updated_at"])
 
 
-@transaction.atomic
 def create_scrap_booking(*, scrap_items, **data):
     quoted = quote_scrap(scrap_items)
     data.pop("estimated_weight", None)
@@ -60,7 +58,6 @@ def create_scrap_booking(*, scrap_items, **data):
     return booking
 
 
-@transaction.atomic
 def add_item(*, scrap_booking, material, estimated_weight, name=""):
     booking = Booking.objects.select_for_update().get(
         pk=scrap_booking.booking_id, booking_type=Booking.BookingType.SCRAP
@@ -79,7 +76,6 @@ def add_item(*, scrap_booking, material, estimated_weight, name=""):
     return item
 
 
-@transaction.atomic
 def update_item(item, **changes):
     booking = Booking.objects.select_for_update().get(pk=item.scrap_booking.booking_id)
     item = ScrapBookingItem.objects.select_related("material").get(pk=item.pk)
@@ -94,7 +90,6 @@ def update_item(item, **changes):
     return item
 
 
-@transaction.atomic
 def delete_item(item):
     booking = Booking.objects.select_for_update().get(pk=item.scrap_booking.booking_id)
     ScrapBookingItem.objects.filter(pk=item.pk).delete()

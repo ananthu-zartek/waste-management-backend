@@ -1,6 +1,7 @@
 from decimal import Decimal
 
 from django.core.exceptions import ValidationError as DjangoValidationError
+from django.db import transaction
 from rest_framework import serializers
 
 from catalog.models import ScrapMaterial, WasteSubCategory
@@ -86,6 +87,7 @@ class BookingCreateSerializer(serializers.ModelSerializer):
             "estimated_payout",
         ]
 
+    @transaction.atomic
     def create(self, validated_data):
         user = self.context["request"].user
         try:
@@ -143,9 +145,11 @@ class BookingWasteItemSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ["id", "created_at", "booking"]
 
+    @transaction.atomic
     def create(self, validated_data):
         return waste_services.add_item(**validated_data)
 
+    @transaction.atomic
     def update(self, instance, validated_data):
         return waste_services.update_item(instance, **validated_data)
 
@@ -183,9 +187,11 @@ class ScrapBookingItemSerializer(serializers.ModelSerializer):
             "material",
         ]
 
+    @transaction.atomic
     def create(self, validated_data):
         return scrap_services.add_item(**validated_data)
 
+    @transaction.atomic
     def update(self, instance, validated_data):
         return scrap_services.update_item(instance, **validated_data)
 
