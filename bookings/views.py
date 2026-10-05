@@ -5,11 +5,10 @@ from django.db.models.functions import Cast
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import viewsets
 from rest_framework.decorators import action
-from rest_framework.exceptions import PermissionDenied, ValidationError
+from rest_framework.exceptions import ValidationError
 from rest_framework.filters import SearchFilter
 from rest_framework.response import Response
 
-from users.models import User
 
 from . import scrap_services, waste_services
 from .filters import BookingFilter
@@ -78,8 +77,6 @@ class BookingViewSet(UserScopedQuerysetMixin, viewsets.ModelViewSet):
 
     @action(detail=True, methods=["post"])
     def confirm(self, request, pk=None):
-        if request.user.user_type != User.UserType.CUSTOMER:
-            raise PermissionDenied("Only customers can confirm bookings.")
         booking = self.get_object()
         confirm_booking(booking_id=booking.pk, customer_id=booking.customer_id)
         return Response(self.get_serializer(self.get_object()).data)

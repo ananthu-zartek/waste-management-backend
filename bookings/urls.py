@@ -9,11 +9,7 @@ from .views import (
 
 router = DefaultRouter()
 router.register("bookings", BookingViewSet, basename="booking")
-router.register(
-    "booking-waste-items", BookingWasteItemViewSet, basename="booking-waste-item"
-)
+router.register("booking-waste-items", BookingWasteItemViewSet, basename="booking-waste-item")
 router.register("scrap-bookings", ScrapBookingViewSet, basename="scrap-booking")
-router.register(
-    "scrap-booking-items", ScrapBookingItemViewSet, basename="scrap-booking-item"
-)
+router.register("scrap-booking-items", ScrapBookingItemViewSet, basename="scrap-booking-item")
 urlpatterns = router.urls

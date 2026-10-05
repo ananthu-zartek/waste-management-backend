@@ -25,6 +25,7 @@ class Booking(TimeStampedModel):
         "customers.CustomerProfile",
         on_delete=models.CASCADE,
         related_name="bookings",
+        db_index=False,
     )
     driver = models.ForeignKey(
         "drivers.DriverProfile",
@@ -32,6 +33,7 @@ class Booking(TimeStampedModel):
         null=True,
         blank=True,
         related_name="bookings",
+        db_index=False,
     )
     address = models.ForeignKey(
         "customers.Address",
@@ -42,6 +44,7 @@ class Booking(TimeStampedModel):
         "catalog.TimeSlot",
         on_delete=models.PROTECT,
         related_name="bookings",
+        db_index=False,
     )
     scheduled_date = models.DateField()
     booking_type = models.CharField(
@@ -78,6 +81,9 @@ class Booking(TimeStampedModel):
         indexes = [
             models.Index(fields=["scheduled_date", "status"]),
             models.Index(fields=["source", "status", "created_at"]),
+            models.Index(fields=["slot", "scheduled_date"], name="booking_slot_date_idx"),
+            models.Index(fields=["customer", "scheduled_date"], name="booking_customer_date_idx"),
+            models.Index(fields=["driver", "scheduled_date"], name="booking_driver_date_idx"),
         ]
 
     def __str__(self):

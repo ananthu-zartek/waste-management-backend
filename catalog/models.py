@@ -4,6 +4,18 @@ from django.core.validators import MinValueValidator, RegexValidator
 from users.models import TimeStampedModel
 
 
+class QuickAction(TimeStampedModel):
+    title = models.CharField(max_length=100, unique=True)
+    subtitle = models.CharField(max_length=150)
+    sort_order = models.PositiveSmallIntegerField(default=0)
+
+    class Meta:
+        ordering = ["sort_order", "id"]
+
+    def __str__(self):
+        return self.title
+
+
 class ServiceArea(TimeStampedModel):
     name = models.CharField(max_length=150, unique=True)
     is_active = models.BooleanField(default=True)
@@ -58,6 +70,7 @@ class ScrapMaterial(TimeStampedModel):
 class TimeSlot(TimeStampedModel):
     start_time = models.TimeField()
     end_time = models.TimeField()
+    capacity = models.PositiveSmallIntegerField(default=4, validators=[MinValueValidator(1)])
     is_active = models.BooleanField(default=True)
 
     class Meta:
@@ -132,4 +145,4 @@ class WasteSubCategory(TimeStampedModel):
         ]
 
     def __str__(self):
-        return f"{self.category.name} - {self.name}"
+        return f""

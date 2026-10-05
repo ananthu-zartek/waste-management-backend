@@ -1,6 +1,7 @@
 from rest_framework.routers import DefaultRouter
 
 from .views import (
+    QuickActionViewSet,
     WasteTypeViewSet,
     WasteCategoryViewSet,
     WasteSubCategoryViewSet,
@@ -11,6 +12,7 @@ from .views import (
 )
 
 router = DefaultRouter()
+router.register("quick-actions", QuickActionViewSet, basename="quick-action")
 router.register("service-areas", ServiceAreaViewSet, basename="service-area")
 router.register("service-pincodes", ServicePincodeViewSet, basename="service-pincode")
 router.register("scrap-materials", ScrapMaterialViewSet, basename="scrap-material")

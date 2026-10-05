@@ -1,15 +1,27 @@
 from django.contrib import admin
 
-from .models import WasteType, WasteCategory, WasteSubCategory, TimeSlot
+from .models import QuickAction, WasteType, WasteCategory, WasteSubCategory, TimeSlot
 from .models import ScrapMaterial
 from .models import ServiceArea, ServicePincode
+
+
+@admin.register(QuickAction)
+class QuickActionAdmin(admin.ModelAdmin):
+    list_display = ("id", "title", "subtitle", "sort_order")
+    search_fields = ("title", "subtitle")
+    ordering = ("sort_order", "id")
 
 
 class ServicePincodeInline(admin.TabularInline):
     model = ServicePincode
     extra = 1
     can_delete = True
-    show_change_link = True
+    readonly_fields = ("pincode_id",)
+    fields = ("pincode_id", "pincode", "area_name", "is_active")
+
+    @admin.display(description="ID")
+    def pincode_id(self, obj):
+        return obj.pk if obj.pk else ""
 
 
 @admin.register(ServiceArea)
@@ -22,10 +34,9 @@ class ServiceAreaAdmin(admin.ModelAdmin):
 
 @admin.register(ServicePincode)
 class ServicePincodeAdmin(admin.ModelAdmin):
-    list_display = ("id", "pincode", "area_name", "service_area", "is_active")
-    list_filter = ("service_area", "is_active")
     search_fields = ("pincode", "area_name", "service_area__name")
-    autocomplete_fields = ("service_area",)
+    def get_model_perms(self, request):
+        return {}
 
 
 @admin.register(ScrapMaterial)
@@ -57,7 +68,12 @@ class WasteTypeAdmin(admin.ModelAdmin):
 class WasteSubCategoryInline(admin.TabularInline):
     model = WasteSubCategory
     extra = 1
-    show_change_link = True
+    readonly_fields = ("subcategory_id",)
+    fields = ("subcategory_id", "name", "is_active")
+
+    @admin.display(description="ID")
+    def subcategory_id(self, obj):
+        return obj.pk if obj.pk else ""
 
 
 @admin.register(WasteCategory)
@@ -89,26 +105,6 @@ class WasteCategoryAdmin(admin.ModelAdmin):
 
 @admin.register(WasteSubCategory)
 class WasteSubCategoryAdmin(admin.ModelAdmin):
-    list_display = (
-        "id",
-        "name",
-        "category",
-        "is_active",
-        "created_at",
-        "updated_at",
-    )
-    list_filter = (
-        "category__waste_type",
-        "category",
-        "is_active",
-    )
-    search_fields = (
-        "name",
-        "category__name",
-        "category__waste_type__name",
-    )
-    autocomplete_fields = ("category",)
-    ordering = (
-        "category",
-        "name",
-    )
+    search_fields = ("name", "category__name", "category__waste_type__name")
+    def get_model_perms(self, request):
+        return {}

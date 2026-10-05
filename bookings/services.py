@@ -9,13 +9,14 @@ from django.utils import timezone
 
 from drivers.models import DriverProfile, DriverSlot
 from users.models import User
+from catalog.models import TimeSlot
 from catalog.services import validate_service_pincode
 
 from .exceptions import NoSlotAvailable
 from .models import Booking
 from .capacity import (
     CONFIRMATION_WINDOW,
-    SLOT_CAPACITY,
+    occupied_slot_capacity,
     reserved_driver_slots,
 )
 
@@ -32,7 +33,7 @@ def drivers_serving_pincode(pincode):
 
 
 def assign_driver(*, slot, scheduled_date, pincode, driver_id=None):
-    """Lock eligible drivers, then assign the least-loaded driver at random on ties."""
+    """Choose a least-loaded eligible driver while the caller holds the slot lock."""
     candidate_ids = list(
         drivers_serving_pincode(pincode)
         .filter(**({"pk": driver_id} if driver_id is not None else {}))
@@ -41,28 +42,34 @@ def assign_driver(*, slot, scheduled_date, pincode, driver_id=None):
     if not candidate_ids:
         return None
 
-    # Lock in stable order so overlapping assignment transactions cannot deadlock.
-    candidates = list(
-        DriverProfile.objects.filter(pk__in=candidate_ids)
-        .select_for_update(of=("self",))
-        .order_by("pk")
-    )
     reservations = (
         reserved_driver_slots()
-        .filter(driver__in=candidates, slot=slot, date=scheduled_date)
+        .filter(driver_id__in=candidate_ids, slot=slot, date=scheduled_date)
         .values("driver_id")
         .annotate(count=Count("pk"))
     )
     counts = {row["driver_id"]: row["count"] for row in reservations}
-    lowest_count = min(counts.get(candidate.pk, 0) for candidate in candidates)
-    least_loaded = [
-        candidate
-        for candidate in candidates
-        if counts.get(candidate.pk, 0) == lowest_count
-    ]
-    if lowest_count >= SLOT_CAPACITY:
-        return None
-    return random.choice(least_loaded)
+    while candidate_ids:
+        lowest_count = min(
+            counts.get(candidate_id, 0) for candidate_id in candidate_ids
+        )
+        least_loaded_ids = [
+            candidate_id
+            for candidate_id in candidate_ids
+            if counts.get(candidate_id, 0) == lowest_count
+        ]
+        chosen_id = random.choice(least_loaded_ids)
+        try:
+            chosen = DriverProfile.objects.select_for_update(
+                of=("self",), no_key=True
+            ).get(pk=chosen_id)
+        except DriverProfile.DoesNotExist:
+            candidate_ids.remove(chosen_id)
+            continue
+        if drivers_serving_pincode(pincode).filter(pk=chosen_id).exists():
+            return chosen
+        candidate_ids.remove(chosen_id)
+    return None
 
 
 def slot_is_future(slot, scheduled_date):
@@ -85,23 +92,24 @@ def create_booking(
     source=Booking.BookingSource.CUSTOMER,
 ):
     """Create a booking and reserve customer capacity atomically."""
+    slot = TimeSlot.objects.select_for_update().get(pk=slot.pk)
     if not slot.is_active or not slot_is_future(slot, scheduled_date):
         raise ValidationError("Select an active, future time slot.")
+    if occupied_slot_capacity(slot, scheduled_date) >= slot.capacity:
+        raise NoSlotAvailable()
     if address.customer_id != customer.pk:
         raise ValidationError("The address must belong to the customer.")
     if address.pincode_id is None:
         raise ValidationError("Select a supported pincode for this address.")
     pincode = address.pincode.pincode
-    validate_service_pincode(pincode)
+    if (
+        driver_id is not None
+        and not DriverProfile.objects.filter(pk=driver_id).exists()
+    ):
+        raise ValidationError("Select a valid driver.")
 
     driver = None
     if source == Booking.BookingSource.CUSTOMER or driver_id is not None:
-        if driver_id is not None:
-            try:
-                selected_driver = DriverProfile.objects.get(pk=driver_id)
-            except DriverProfile.DoesNotExist as exc:
-                raise ValidationError("Select a valid driver.") from exc
-            validate_service_pincode(pincode, selected_driver)
         driver = assign_driver(
             slot=slot,
             scheduled_date=scheduled_date,
@@ -110,7 +118,8 @@ def create_booking(
         )
         if driver is None:
             raise NoSlotAvailable()
-
+    else:
+        validate_service_pincode(pincode)
     now = timezone.now()
     booking = Booking(
         customer=customer,

@@ -4,10 +4,11 @@ from rest_framework.response import Response
 from django.db.models import Count
 
 from bookings.services import drivers_serving_pincode, slot_is_future
-from bookings.capacity import SLOT_CAPACITY
-from drivers.models import DriverSlot
+from bookings.capacity import CAPACITY_STATUSES
+from bookings.models import Booking
 
 from .models import (
+    QuickAction,
     WasteType,
     WasteCategory,
     WasteSubCategory,
@@ -17,6 +18,7 @@ from .models import (
     ServicePincode,
 )
 from .serializers import (
+    QuickActionSerializer,
     WasteTypeSerializer,
     WasteCategorySerializer,
     WasteSubCategorySerializer,
@@ -32,6 +34,11 @@ class ServiceAreaViewSet(viewsets.ModelViewSet):
     queryset = ServiceArea.objects.prefetch_related("pincodes")
     serializer_class = ServiceAreaSerializer
     filterset_fields = ["is_active"]
+
+
+class QuickActionViewSet(viewsets.ModelViewSet):
+    queryset = QuickAction.objects.all()
+    serializer_class = QuickActionSerializer
 
 
 class ServicePincodeViewSet(viewsets.ModelViewSet):
@@ -64,22 +71,23 @@ class TimeSlotViewSet(viewsets.ModelViewSet):
         remaining_by_slot = {}
         if future_slots:
             eligible = drivers_serving_pincode(query.validated_data["pincode"])
-            driver_count = eligible.count()
-            if driver_count:
+            if eligible.exists():
                 remaining_by_slot = {
-                    slot.pk: driver_count * SLOT_CAPACITY for slot in future_slots
+                    slot.pk: slot.capacity for slot in future_slots
                 }
                 reservations = (
-                    DriverSlot.objects.filter(
-                        date=date,
+                    Booking.objects.filter(
+                        scheduled_date=date,
                         slot__in=future_slots,
-                        driver_id__in=eligible.values("pk"),
+                        status__in=CAPACITY_STATUSES,
                     )
                     .values("slot_id")
                     .annotate(count=Count("pk"))
                 )
                 for row in reservations:
-                    remaining_by_slot[row["slot_id"]] -= row["count"]
+                    remaining_by_slot[row["slot_id"]] = max(
+                        0, remaining_by_slot[row["slot_id"]] - row["count"]
+                    )
         result = []
         for slot in slots:
             remaining = remaining_by_slot.get(slot.pk, 0)

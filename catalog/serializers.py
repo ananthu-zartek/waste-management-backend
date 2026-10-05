@@ -5,6 +5,7 @@ from django.utils import timezone
 from .services import validate_service_pincode
 
 from .models import (
+    QuickAction,
     WasteType,
     WasteCategory,
     WasteSubCategory,
@@ -13,6 +14,12 @@ from .models import (
     ServiceArea,
     ServicePincode,
 )
+
+
+class QuickActionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = QuickAction
+        fields = ["id", "title", "subtitle"]
 
 
 class ServicePincodeSerializer(serializers.ModelSerializer):
@@ -66,6 +73,7 @@ class TimeSlotSerializer(serializers.ModelSerializer):
             "id",
             "start_time",
             "end_time",
+            "capacity",
             "is_active",
         ]
         read_only_fields = ["id"]
