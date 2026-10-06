@@ -30,6 +30,5 @@ def expire_pending_bookings():
             booking.status = Booking.BookingStatus.EXPIRED
             booking.expired_at = booking.created_at + CONFIRMATION_WINDOW
             booking.save(update_fields=["status", "expired_at", "updated_at"])
-            DriverSlot.objects.filter(booking=booking).delete()
             expired_count += 1
     return expired_count

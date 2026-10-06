@@ -7,6 +7,8 @@ from .models import Booking
 
 @receiver(post_save, sender=Booking)
 def delete_driver_slot_on_booking_cancelled(sender, instance, created, **kwargs):
-    if instance.status == Booking.BookingStatus.CANCELLED:
+    if instance.status in [
+        Booking.BookingStatus.CANCELLED,
+        Booking.BookingStatus.EXPIRED,
+    ]:
         DriverSlot.objects.filter(booking=instance).delete()
-

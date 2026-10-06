@@ -1,5 +1,6 @@
 from django.db import models
 from users.models import User
+from bookings.models import Booking
 
 
 class CustomerProfile(models.Model):
@@ -10,6 +11,14 @@ class CustomerProfile(models.Model):
     )
     name = models.CharField(max_length=100, null=True, blank=True)
     email = models.EmailField(null=True, blank=True)
+
+    @property
+    def current_address(self):
+        return self.addresses.filter(is_default=True).first()
+
+    @property
+    def completed_bookings_count(self):
+        return self.bookings.filter(status=Booking.BookingStatus.COMPLETED).count()
 
     def __str__(self):
         return str(self.user.phone_number)

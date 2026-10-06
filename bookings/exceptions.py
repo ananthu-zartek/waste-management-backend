@@ -8,4 +8,4 @@ class NoSlotAvailable(ValidationError):
 
 class NoDriversAvailable(ValidationError):
     def __init__(self):
-        super().__init__("No drivers available for this date and time slot.")
+        super().__init__("Sorry ! No drivers available at the moment.")

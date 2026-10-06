@@ -4,6 +4,7 @@ from drivers.models import DriverSlot
 from .models import Booking
 
 CONFIRMATION_WINDOW = timedelta(minutes=90)
+MAX_BOOKINGS_PER_DRIVER_SLOT = 4
 CAPACITY_STATUSES = (
     Booking.BookingStatus.PENDING,
     Booking.BookingStatus.ASSIGNED,

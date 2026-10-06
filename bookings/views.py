@@ -34,6 +34,7 @@ class BookingViewSet(UserScopedQuerysetMixin, viewsets.ModelViewSet):
             "customer__user",
             "driver",
             "driver__user",
+            "cancelled_by",
             "address",
             "address__customer__user",
             "address__pincode",

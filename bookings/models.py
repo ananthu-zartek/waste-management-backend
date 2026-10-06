@@ -3,6 +3,7 @@ from django.db import models
 from users.models import TimeStampedModel
 from django.utils import timezone
 
+
 class Booking(TimeStampedModel):
     class BookingType(models.TextChoices):
         WASTE = "waste", "Waste"
@@ -72,18 +73,31 @@ class Booking(TimeStampedModel):
     confirmed_at = models.DateTimeField(null=True, blank=True)
     completed_at = models.DateTimeField(null=True, blank=True)
     cancelled_at = models.DateTimeField(null=True, blank=True)
+    cancellation_notes = models.TextField(blank=True)
+    cancelled_by = models.ForeignKey(
+        "users.User",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="cancelled_bookings",
+    )
     expired_at = models.DateTimeField(null=True, blank=True)
     note = models.TextField(blank=True)
-    other_notes = models.TextField(blank=True)
     estimated_payout = models.DecimalField(max_digits=12, decimal_places=2, default=0)
 
     class Meta:
         indexes = [
             models.Index(fields=["scheduled_date", "status"]),
             models.Index(fields=["source", "status", "created_at"]),
-            models.Index(fields=["slot", "scheduled_date"], name="booking_slot_date_idx"),
-            models.Index(fields=["customer", "scheduled_date"], name="booking_customer_date_idx"),
-            models.Index(fields=["driver", "scheduled_date"], name="booking_driver_date_idx"),
+            models.Index(
+                fields=["slot", "scheduled_date"], name="booking_slot_date_idx"
+            ),
+            models.Index(
+                fields=["customer", "scheduled_date"], name="booking_customer_date_idx"
+            ),
+            models.Index(
+                fields=["driver", "scheduled_date"], name="booking_driver_date_idx"
+            ),
         ]
 
     def save(self, *args, **kwargs):

@@ -47,6 +47,7 @@ INSTALLED_APPS = [
     "rest_framework",
     "django_filters",
     "django_celery_beat",
+    "fcm_django",
 
     # Local apps
     "users.apps.UsersConfig",

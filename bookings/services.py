@@ -12,6 +12,7 @@ from catalog.models import TimeSlot
 from .exceptions import NoSlotAvailable, NoDriversAvailable
 from .models import Booking
 from .capacity import (
+    MAX_BOOKINGS_PER_DRIVER_SLOT,
     occupied_slot_capacity,
 )
 
@@ -46,6 +47,11 @@ def assign_driver(slot, scheduled_date, pincode):
         .annotate(count=Count("pk"))
     )
     counts = {row["driver_id"]: row["count"] for row in reservations}
+    candidate_ids = [
+        candidate_id
+        for candidate_id in candidate_ids
+        if counts.get(candidate_id, 0) < MAX_BOOKINGS_PER_DRIVER_SLOT
+    ]
     while candidate_ids:
         lowest_count = min(
             counts.get(candidate_id, 0) for candidate_id in candidate_ids
@@ -64,7 +70,13 @@ def assign_driver(slot, scheduled_date, pincode):
             candidate_ids.remove(chosen_id)
             continue
 
-        if drivers_serving_pincode(pincode).filter(pk=chosen_id).exists():
+        if (
+            drivers_serving_pincode(pincode).filter(pk=chosen_id).exists()
+            and DriverSlot.objects.filter(
+                driver_id=chosen_id, slot=slot, date=scheduled_date
+            ).count()
+            < MAX_BOOKINGS_PER_DRIVER_SLOT
+        ):
             return driver
 
         candidate_ids.remove(chosen_id)

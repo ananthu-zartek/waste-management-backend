@@ -67,6 +67,7 @@ class VerifyOTPSerializer(serializers.Serializer):
 class AuthenticationResponseSerializer(serializers.Serializer):
     access = serializers.CharField()
     refresh = serializers.CharField()
+    user_type = serializers.ChoiceField(choices=User.UserType.choices)
 
 
 class TokenRefreshSerializer(serializers.Serializer):

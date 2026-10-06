@@ -57,6 +57,7 @@ class UserViewSet(AllowAnyMixin, viewsets.ModelViewSet):
         response_data = {
             "access": str(refresh.access_token),
             "refresh": str(refresh),
+            "user_type": user.user_type,
         }
         return Response(AuthenticationResponseSerializer(response_data).data)
 

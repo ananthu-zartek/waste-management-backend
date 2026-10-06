@@ -224,6 +224,9 @@ class BookingSlotSerializer(serializers.Serializer):
 
 
 class BookingSerializer(serializers.ModelSerializer):
+    cancelled_by = serializers.CharField(
+        source="cancelled_by.user_type", read_only=True
+    )
     customer = CustomerProfileSerializer(read_only=True)
     driver = DriverProfileSerializer(read_only=True)
     address = AddressSerializer(read_only=True)
@@ -248,24 +251,42 @@ class BookingSerializer(serializers.ModelSerializer):
 
         return attrs
 
+    def update(self, instance, validated_data):
+        if (
+            validated_data.get("status") == Booking.BookingStatus.CANCELLED
+            and instance.status != Booking.BookingStatus.CANCELLED
+        ):
+            validated_data["cancelled_by"] = self.context["request"].user
+        return super().update(instance, validated_data)
+
     class Meta:
         model = Booking
         fields = [
+            # Identification
             "id",
+            "reference",
+            # Booking details
+            "booking_type",
+            "status",
+            "source",
+            "note",
+            # Relationships
             "customer",
             "driver",
             "address",
             "slot",
+            # Schedule
             "scheduled_date",
-            "booking_type",
-            "source",
-            "status",
-            "note",
-            "other_notes",
+            # Waste / Scrap
             "waste_items",
             "scrap_items",
+            # Estimates
             "estimated_weight",
             "estimated_payout",
+            # Cancellation
+            "cancellation_notes",
+            "cancelled_by",
+            # Timestamps
             "created_at",
             "updated_at",
             "assigned_at",
@@ -273,8 +294,8 @@ class BookingSerializer(serializers.ModelSerializer):
             "completed_at",
             "cancelled_at",
             "expired_at",
+            # Computed / nested details
             "slot_details",
-            "reference",
         ]
 
     def get_reference(self, booking):

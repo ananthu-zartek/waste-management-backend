@@ -6,51 +6,6 @@ from .models import Address, CustomerProfile
 from users.serializers import UserSerializer
 
 
-class CustomerProfileSerializer(serializers.ModelSerializer):
-    phone_number = serializers.CharField(
-        source="user.phone_number",
-        required=False,
-    )
-    user_type = serializers.CharField(
-        source="user.user_type",
-        read_only=True,
-    )
-    created_at = serializers.DateTimeField(
-        source="user.created_at",
-        read_only=True,
-    )
-
-    class Meta:
-        model = CustomerProfile
-        fields = (
-            "id",
-            "phone_number",
-            "user_type",
-            "created_at",
-            "name",
-            "email",
-        )
-        read_only_fields = (
-            "id",
-            "user_type",
-            "created_at",
-        )
-
-    def validate_phone_number(self, phone_number):
-        users = User.objects.filter(phone_number=phone_number)
-        if self.instance:
-            users = users.exclude(pk=self.instance.user_id)
-        if users.exists():
-            raise serializers.ValidationError("Phone number already exists.")
-        return phone_number
-
-    def update(self, instance, validated_data):
-        user_data = validated_data.pop("user", None)
-        if user_data:
-            User.objects.filter(pk=instance.user_id).update(**user_data)
-        return super().update(instance, validated_data)
-
-
 class AddressSerializer(serializers.ModelSerializer):
     user = UserSerializer(source="customer.user", read_only=True)
     pincode = serializers.PrimaryKeyRelatedField(queryset=ServicePincode.objects.all())
@@ -89,3 +44,58 @@ class AddressSerializer(serializers.ModelSerializer):
             "pincode",
             "is_default",
         ]
+
+
+class CustomerProfileSerializer(serializers.ModelSerializer):
+    phone_number = serializers.CharField(
+        source="user.phone_number",
+        required=False,
+    )
+    is_active = serializers.BooleanField(source="user.is_active", required=False)
+    current_address = AddressSerializer(read_only=True)
+    completed_bookings_count = serializers.IntegerField(read_only=True)
+    user_type = serializers.CharField(
+        source="user.user_type",
+        read_only=True,
+    )
+    created_at = serializers.DateTimeField(
+        source="user.created_at",
+        read_only=True,
+    )
+
+    class Meta:
+        model = CustomerProfile
+        fields = (
+            "id",
+            "phone_number",
+            "user_type",
+            "is_active",
+            "current_address",
+            "completed_bookings_count",
+            "created_at",
+            "name",
+            "email",
+        )
+        read_only_fields = (
+            "id",
+            "user_type",
+            "current_address",
+            "completed_bookings_count",
+            "created_at",
+        )
+
+    def validate_phone_number(self, phone_number):
+        users = User.objects.filter(phone_number=phone_number)
+        if self.instance:
+            users = users.exclude(pk=self.instance.user_id)
+        if users.exists():
+            raise serializers.ValidationError("Phone number already exists.")
+        return phone_number
+
+    def update(self, instance, validated_data):
+        user_data = validated_data.pop("user", None)
+        if user_data:
+            for field, value in user_data.items():
+                setattr(instance.user, field, value)
+            instance.user.save(update_fields=list(user_data))
+        return super().update(instance, validated_data)
