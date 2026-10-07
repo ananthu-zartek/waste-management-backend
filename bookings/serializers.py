@@ -7,7 +7,7 @@ from django.utils import timezone
 from rest_framework import serializers
 
 from catalog.models import ScrapMaterial, WasteSubCategory
-from customers.mixins import CustomerProfileRequiredMixin
+from django.core.exceptions import ObjectDoesNotExist
 from customers.serializers import AddressSerializer, CustomerProfileSerializer
 from drivers.models import DriverProfile
 from drivers.serializers import DriverProfileSerializer
@@ -49,15 +49,24 @@ class BookingCreateSerializer(serializers.ModelSerializer):
     scrap_items = ScrapItemInputSerializer(many=True, required=False, write_only=True)
 
     def validate(self, attrs):
+        try:
+            profile = self.context["request"].user.customer_profile
+        except ObjectDoesNotExist:
+            raise serializers.ValidationError({"error": "Customer profile not found."})
+
+        try:
+            config = profile.system_configuration
+            minimum_weight = config.minimum_booking_weight
+        except ObjectDoesNotExist:
+            minimum_weight = Decimal("5")
+
         booking_type = attrs.get("booking_type")
         is_waste = booking_type == Booking.BookingType.WASTE
         item_field = "waste_items" if is_waste else "scrap_items"
         items = attrs.get(item_field, [])
+
         if not items:
             return attrs
-
-        config = self.get_customer_profile().system_configuration
-        minimum_weight = config.minimum_booking_weight if config else Decimal("5")
 
         if is_waste:
             total_weight = attrs.get("estimated_weight", Decimal("0"))
@@ -71,7 +80,7 @@ class BookingCreateSerializer(serializers.ModelSerializer):
 
         if total_weight < minimum_weight:
             raise serializers.ValidationError(
-                {error_field: (f"Minimum weight must be at least {minimum_weight} kg.")}
+                {error_field: f"Minimum weight must be at least {minimum_weight} kg."}
             )
 
         return attrs
