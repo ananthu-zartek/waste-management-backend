@@ -140,11 +140,6 @@ class BookingWasteItem(TimeStampedModel):
         on_delete=models.PROTECT,
         related_name="booking_items",
     )
-    estimated_weight = models.DecimalField(
-        max_digits=10,
-        decimal_places=2,
-        default=0,
-    )
 
     def __str__(self):
         return f"Booking {self.booking_id} - {self.subcategory}"

@@ -28,9 +28,6 @@ class WasteItemInputSerializer(serializers.Serializer):
     subcategory = serializers.PrimaryKeyRelatedField(
         queryset=WasteSubCategory.objects.filter(is_active=True)
     )
-    estimated_weight = serializers.DecimalField(
-        max_digits=10, decimal_places=2, min_value=0
-    )
 
 
 class ScrapItemInputSerializer(serializers.Serializer):
@@ -47,33 +44,36 @@ class ScrapQuoteSerializer(serializers.Serializer):
     scrap_items = ScrapItemInputSerializer(many=True, allow_empty=False)
 
 
-class BookingCreateSerializer(
-    CustomerProfileRequiredMixin, serializers.ModelSerializer
-):
+class BookingCreateSerializer(serializers.ModelSerializer):
     waste_items = WasteItemInputSerializer(many=True, required=False, write_only=True)
     scrap_items = ScrapItemInputSerializer(many=True, required=False, write_only=True)
 
     def validate(self, attrs):
-        item_field = (
-            "waste_items"
-            if attrs.get("booking_type") == Booking.BookingType.WASTE
-            else "scrap_items"
-        )
+        booking_type = attrs.get("booking_type")
+        is_waste = booking_type == Booking.BookingType.WASTE
+        item_field = "waste_items" if is_waste else "scrap_items"
         items = attrs.get(item_field, [])
-        if items:
-            configuration = self.get_customer_profile().system_configuration
-            minimum_weight = (
-                configuration.minimum_booking_weight
-                if configuration
-                else Decimal("5")
-            )
+        if not items:
+            return attrs
+
+        config = self.get_customer_profile().system_configuration
+        minimum_weight = config.minimum_booking_weight if config else Decimal("5")
+
+        if is_waste:
+            total_weight = attrs.get("estimated_weight", Decimal("0"))
+            error_field = "estimated_weight"
+        else:
             total_weight = sum(
-                (item["estimated_weight"] for item in items), Decimal("0")
+                (item["estimated_weight"] for item in items),
+                Decimal("0"),
             )
-            if total_weight < minimum_weight:
-                raise serializers.ValidationError(
-                    {item_field: f"Total estimated weight must be at least {minimum_weight} kg."}
-                )
+            error_field = item_field
+
+        if total_weight < minimum_weight:
+            raise serializers.ValidationError(
+                {error_field: (f"Minimum weight must be at least {minimum_weight} kg.")}
+            )
+
         return attrs
 
     class Meta:
@@ -149,9 +149,6 @@ class BookingCreateSerializer(
 
 
 class BookingWasteItemSerializer(serializers.ModelSerializer):
-    estimated_weight = serializers.DecimalField(
-        max_digits=10, decimal_places=2, min_value=0
-    )
     subcategory_details = WasteSubCategorySerializer(
         source="subcategory", read_only=True
     )
@@ -163,18 +160,9 @@ class BookingWasteItemSerializer(serializers.ModelSerializer):
             "booking",
             "subcategory",
             "subcategory_details",
-            "estimated_weight",
             "created_at",
         ]
         read_only_fields = ["id", "created_at", "booking"]
-
-    @transaction.atomic
-    def create(self, validated_data):
-        return waste_services.add_item(**validated_data)
-
-    @transaction.atomic
-    def update(self, instance, validated_data):
-        return waste_services.update_item(instance, **validated_data)
 
 
 class BookingWasteItemCreateSerializer(BookingWasteItemSerializer):

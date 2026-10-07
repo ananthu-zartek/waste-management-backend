@@ -124,6 +124,7 @@ def create_booking(
         scheduled_date=scheduled_date,
         booking_type=booking_type,
         source=source,
+        status=Booking.BookingStatus.CONFIRMED,
         assigned_at=now if driver is not None else None,
         confirmed_at=now if source == Booking.BookingSource.ADMIN else None,
         estimated_weight=estimated_weight,

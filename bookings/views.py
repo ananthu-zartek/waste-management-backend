@@ -10,7 +10,7 @@ from rest_framework.filters import SearchFilter
 from rest_framework.response import Response
 
 
-from . import scrap_services, waste_services
+from . import scrap_services
 from .filters import BookingFilter
 from .mixins import UserScopedQuerysetMixin
 from .models import Booking, BookingWasteItem, ScrapBooking, ScrapBookingItem
@@ -112,10 +112,6 @@ class BookingWasteItemViewSet(UserScopedQuerysetMixin, viewsets.ModelViewSet):
         if self.action == "create":
             return BookingWasteItemCreateSerializer
         return BookingWasteItemSerializer
-
-    @transaction.atomic
-    def perform_destroy(self, instance):
-        waste_services.delete_item(instance)
 
 
 class ScrapBookingViewSet(UserScopedQuerysetMixin, viewsets.ReadOnlyModelViewSet):

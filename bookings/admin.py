@@ -1,6 +1,6 @@
 from django.contrib import admin
 from django.db import transaction
-from . import waste_services, scrap_services
+from . import scrap_services
 
 from .models import (
     Booking,
@@ -51,31 +51,13 @@ class BookingAdmin(admin.ModelAdmin):
 
 @admin.register(BookingWasteItem)
 class BookingWasteItemAdmin(admin.ModelAdmin):
-    list_display = ("id", "booking", "subcategory", "estimated_weight", "created_at")
+    list_display = ("id", "booking", "subcategory", "created_at")
     search_fields = ("=booking__id", "subcategory__name")
     autocomplete_fields = ("booking", "subcategory")
     list_select_related = ("booking__customer__user", "subcategory__category")
 
     def get_readonly_fields(self, request, obj=None):
         return ("booking",) if obj else ()
-
-    def save_model(self, request, obj, form, change):
-        data = {
-            "subcategory": obj.subcategory,
-            "estimated_weight": obj.estimated_weight,
-        }
-        if change:
-            waste_services.update_item(obj, **data)
-        else:
-            obj.pk = waste_services.add_item(booking=obj.booking, **data).pk
-
-    def delete_model(self, request, obj):
-        waste_services.delete_item(obj)
-
-    @transaction.atomic
-    def delete_queryset(self, request, queryset):
-        for item in queryset:
-            waste_services.delete_item(item)
 
 
 @admin.register(ScrapBooking)

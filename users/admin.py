@@ -13,4 +13,4 @@ class UserAdmin(admin.ModelAdmin):
     search_fields = ("phone_number",)
 
 
-admin.register(SystemConfiguration)
+admin.site.register(SystemConfiguration)
