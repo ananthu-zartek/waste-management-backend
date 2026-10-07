@@ -1,4 +1,5 @@
 from django.contrib import admin
+from django.contrib.gis.admin import GISModelAdmin
 
 from .models import CustomerProfile, Address
 
@@ -11,18 +12,17 @@ class CustomerProfileAdmin(admin.ModelAdmin):
 
 
 @admin.register(Address)
-class AddressAdmin(admin.ModelAdmin):
+class AddressAdmin(GISModelAdmin):
     autocomplete_fields = ("pincode",)
     list_select_related = ("customer__user", "pincode")
     list_display = (
         "id",
         "customer",
-        "customer__name",
         "address_type",
-        "house_no",
         "area",
         "city",
         "pincode",
+        "is_default",
     )
     search_fields = (
         "customer__user__phone_number",

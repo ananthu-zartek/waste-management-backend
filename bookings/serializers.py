@@ -6,7 +6,7 @@ from django.utils import timezone
 from rest_framework import serializers
 
 from catalog.models import ScrapMaterial, WasteSubCategory
-from customers.models import CustomerProfile
+from customers.mixins import CustomerProfileRequiredMixin
 from customers.serializers import AddressSerializer, CustomerProfileSerializer
 from drivers.serializers import DriverProfileSerializer
 from catalog.serializers import WasteSubCategorySerializer
@@ -44,7 +44,9 @@ class ScrapQuoteSerializer(serializers.Serializer):
     scrap_items = ScrapItemInputSerializer(many=True, allow_empty=False)
 
 
-class BookingCreateSerializer(serializers.ModelSerializer):
+class BookingCreateSerializer(
+    CustomerProfileRequiredMixin, serializers.ModelSerializer
+):
     waste_items = WasteItemInputSerializer(many=True, required=False, write_only=True)
     scrap_items = ScrapItemInputSerializer(many=True, required=False, write_only=True)
 
@@ -91,14 +93,7 @@ class BookingCreateSerializer(serializers.ModelSerializer):
 
     @transaction.atomic
     def create(self, validated_data):
-        user = self.context["request"].user
-        try:
-            customer = user.customer_profile
-        except CustomerProfile.DoesNotExist:
-            raise serializers.ValidationError(
-                {"customer": "A customer profile is required."}
-            )
-        validated_data["customer"] = customer
+        validated_data["customer"] = self.get_customer_profile()
         validated_data["source"] = Booking.BookingSource.CUSTOMER
         booking_type = validated_data.pop("booking_type")
         waste_items = validated_data.pop("waste_items", [])

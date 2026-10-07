@@ -1,4 +1,4 @@
-from django.db import models
+from django.contrib.gis.db import models
 from users.models import User
 from bookings.models import Booking
 
@@ -13,7 +13,7 @@ class CustomerProfile(models.Model):
     email = models.EmailField(null=True, blank=True)
 
     @property
-    def current_address(self):
+    def default_address(self):
         return self.addresses.filter(is_default=True).first()
 
     @property
@@ -42,6 +42,7 @@ class Address(models.Model):
     house_no = models.CharField(max_length=100)
     area = models.CharField(max_length=150)
     city = models.CharField(max_length=100)
+    location = models.PointField(geography=True, blank=True, null=True)
     is_default = models.BooleanField(default=False)
     pincode = models.ForeignKey(
         "catalog.ServicePincode",

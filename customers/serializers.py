@@ -1,17 +1,28 @@
 from rest_framework import serializers
+from django.contrib.gis.geos import Point
 from catalog.models import ServicePincode
 from bookings.models import Booking
-from users.models import User
+from .mixins import CustomerProfileRequiredMixin
 from .models import Address, CustomerProfile
 from users.serializers import UserSerializer
+from users.models import User
 
 
-class AddressSerializer(serializers.ModelSerializer):
+class LocationSerializer(serializers.Serializer):
+    latitude = serializers.FloatField(source="y", min_value=-90, max_value=90)
+    longitude = serializers.FloatField(source="x", min_value=-180, max_value=180)
+
+    def validate(self, attrs):
+        return Point(attrs["x"], attrs["y"], srid=4326)
+
+
+class AddressSerializer(CustomerProfileRequiredMixin, serializers.ModelSerializer):
     user = UserSerializer(source="customer.user", read_only=True)
     pincode = serializers.PrimaryKeyRelatedField(queryset=ServicePincode.objects.all())
+    location = LocationSerializer(required=False, allow_null=True)
 
     def create(self, validated_data):
-        validated_data["customer"] = self.context["request"].user.customer_profile
+        validated_data["customer"] = self.get_customer_profile()
         return super().create(validated_data)
 
     def validate_pincode(self, value):
@@ -41,6 +52,7 @@ class AddressSerializer(serializers.ModelSerializer):
             "house_no",
             "area",
             "city",
+            "location",
             "pincode",
             "is_default",
         ]
@@ -52,7 +64,7 @@ class CustomerProfileSerializer(serializers.ModelSerializer):
         required=False,
     )
     is_active = serializers.BooleanField(source="user.is_active", required=False)
-    current_address = AddressSerializer(read_only=True)
+    default_address = AddressSerializer(read_only=True)
     completed_bookings_count = serializers.IntegerField(read_only=True)
     user_type = serializers.CharField(
         source="user.user_type",
@@ -70,7 +82,7 @@ class CustomerProfileSerializer(serializers.ModelSerializer):
             "phone_number",
             "user_type",
             "is_active",
-            "current_address",
+            "default_address",
             "completed_bookings_count",
             "created_at",
             "name",
@@ -79,7 +91,7 @@ class CustomerProfileSerializer(serializers.ModelSerializer):
         read_only_fields = (
             "id",
             "user_type",
-            "current_address",
+            "default_address",
             "completed_bookings_count",
             "created_at",
         )
