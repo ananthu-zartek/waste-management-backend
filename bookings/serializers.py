@@ -1,3 +1,4 @@
+from datetime import datetime, timedelta
 from decimal import Decimal
 
 from django.core.exceptions import ValidationError as DjangoValidationError
@@ -8,8 +9,10 @@ from rest_framework import serializers
 from catalog.models import ScrapMaterial, WasteSubCategory
 from customers.mixins import CustomerProfileRequiredMixin
 from customers.serializers import AddressSerializer, CustomerProfileSerializer
+from drivers.models import DriverProfile
 from drivers.serializers import DriverProfileSerializer
 from catalog.serializers import WasteSubCategorySerializer
+from users.models import User
 
 from .models import (
     Booking,
@@ -17,7 +20,7 @@ from .models import (
     ScrapBooking,
     ScrapBookingItem,
 )
-from . import waste_services, scrap_services
+from . import services, waste_services, scrap_services
 from .capacity import CONFIRMATION_WINDOW
 
 
@@ -49,6 +52,29 @@ class BookingCreateSerializer(
 ):
     waste_items = WasteItemInputSerializer(many=True, required=False, write_only=True)
     scrap_items = ScrapItemInputSerializer(many=True, required=False, write_only=True)
+
+    def validate(self, attrs):
+        item_field = (
+            "waste_items"
+            if attrs.get("booking_type") == Booking.BookingType.WASTE
+            else "scrap_items"
+        )
+        items = attrs.get(item_field, [])
+        if items:
+            configuration = self.get_customer_profile().system_configuration
+            minimum_weight = (
+                configuration.minimum_booking_weight
+                if configuration
+                else Decimal("5")
+            )
+            total_weight = sum(
+                (item["estimated_weight"] for item in items), Decimal("0")
+            )
+            if total_weight < minimum_weight:
+                raise serializers.ValidationError(
+                    {item_field: f"Total estimated weight must be at least {minimum_weight} kg."}
+                )
+        return attrs
 
     class Meta:
         model = Booking
@@ -219,11 +245,13 @@ class BookingSlotSerializer(serializers.Serializer):
 
 
 class BookingSerializer(serializers.ModelSerializer):
-    cancelled_by = serializers.CharField(
-        source="cancelled_by.user_type", read_only=True
-    )
     customer = CustomerProfileSerializer(read_only=True)
     driver = DriverProfileSerializer(read_only=True)
+    driver_id = serializers.PrimaryKeyRelatedField(
+        queryset=DriverProfile.objects.all(), write_only=True, required=False
+    )
+    previous_driver = serializers.PrimaryKeyRelatedField(read_only=True)
+    reassigned_at = serializers.DateTimeField(read_only=True)
     address = AddressSerializer(read_only=True)
     waste_items = BookingWasteItemSerializer(many=True, read_only=True)
     scrap_items = ScrapBookingItemSerializer(
@@ -231,22 +259,64 @@ class BookingSerializer(serializers.ModelSerializer):
     )
     slot_details = BookingSlotSerializer(source="slot", read_only=True)
     reference = serializers.SerializerMethodField()
+    cancelled_by = serializers.CharField(
+        source="cancelled_by.user_type", read_only=True
+    )
 
     def validate(self, attrs):
         instance = self.instance
+        # Cancellation
+        if (
+            instance
+            and attrs.get("status") == Booking.BookingStatus.CANCELLED
+            and instance.status != Booking.BookingStatus.CANCELLED
+        ):
+            slot_start = timezone.make_aware(
+                datetime.combine(instance.scheduled_date, instance.slot.start_time)
+            )
+            request = self.context.get("request")
+            is_customer = (
+                request is not None
+                and getattr(request.user, "user_type", None) == User.UserType.CUSTOMER
+            )
+            cutoff_hours = 0
+            if is_customer:
+                system_configuration = instance.customer.system_configuration
+                cutoff_hours = (
+                    system_configuration.cancellation_cutoff_hours
+                    if system_configuration
+                    else 4
+                )
+            if timezone.now() >= slot_start - timedelta(hours=cutoff_hours):
+                raise serializers.ValidationError(
+                    {"status": "The cancellation deadline has passed."}
+                )
+
+        # Confirmation
         if (
             instance
             and attrs.get("status") == instance.BookingStatus.CONFIRMED
             and instance.status != instance.BookingStatus.CONFIRMED
-            and timezone.now() >= instance.created_at + CONFIRMATION_WINDOW
         ):
-            raise serializers.ValidationError(
-                {"error": "Booking confirmation window has expired."}
-            )
+            if timezone.now() >= instance.created_at + CONFIRMATION_WINDOW:
+                raise serializers.ValidationError(
+                    {"error": "Booking confirmation window has expired."}
+                )
 
         return attrs
 
+    @transaction.atomic
     def update(self, instance, validated_data):
+        new_driver = validated_data.pop("driver_id", None)
+        if new_driver is not None:
+            try:
+                return services.reassign_booking(
+                    booking=instance, new_driver=new_driver
+                )
+            except DjangoValidationError as exc:
+                raise serializers.ValidationError(
+                    getattr(exc, "message_dict", exc.messages)
+                ) from exc
         if (
             validated_data.get("status") == Booking.BookingStatus.CANCELLED
             and instance.status != Booking.BookingStatus.CANCELLED
@@ -262,12 +332,15 @@ class BookingSerializer(serializers.ModelSerializer):
             "reference",
             # Booking details
             "booking_type",
+            "slot_details",
             "status",
             "source",
             "note",
             # Relationships
             "customer",
             "driver",
+            "driver_id",
+            "previous_driver",
             "address",
             "slot",
             # Schedule
@@ -285,12 +358,11 @@ class BookingSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
             "assigned_at",
+            "reassigned_at",
             "confirmed_at",
             "completed_at",
             "cancelled_at",
             "expired_at",
-            # Computed / nested details
-            "slot_details",
         ]
 
     def get_reference(self, booking):

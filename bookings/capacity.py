@@ -1,10 +1,10 @@
 from datetime import timedelta
 
 from drivers.models import DriverSlot
+from users.models import SystemConfiguration
 from .models import Booking
 
 CONFIRMATION_WINDOW = timedelta(minutes=90)
-MAX_BOOKINGS_PER_DRIVER_SLOT = 4
 CAPACITY_STATUSES = (
     Booking.BookingStatus.PENDING,
     Booking.BookingStatus.ASSIGNED,
@@ -12,6 +12,13 @@ CAPACITY_STATUSES = (
     Booking.BookingStatus.IN_PROGRESS,
     Booking.BookingStatus.COMPLETED,
 )
+
+
+def max_bookings_per_driver_slot():
+    configured = SystemConfiguration.objects.values_list(
+        "max_bookings_per_driver_slot", flat=True
+    ).first()
+    return 4 if configured is None else configured
 
 
 def occupied_slot_capacity(slot, scheduled_date):

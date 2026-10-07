@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import User
+from .models import SystemConfiguration, User
 
 
 @admin.register(User)
@@ -11,3 +11,6 @@ class UserAdmin(admin.ModelAdmin):
         "is_staff",
     )
     search_fields = ("phone_number",)
+
+
+admin.register(SystemConfiguration)

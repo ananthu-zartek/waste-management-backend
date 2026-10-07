@@ -11,10 +11,7 @@ from catalog.models import TimeSlot
 
 from .exceptions import NoSlotAvailable, NoDriversAvailable
 from .models import Booking
-from .capacity import (
-    MAX_BOOKINGS_PER_DRIVER_SLOT,
-    occupied_slot_capacity,
-)
+from .capacity import max_bookings_per_driver_slot, occupied_slot_capacity
 
 
 def slot_is_future(slot, scheduled_date):
@@ -34,6 +31,7 @@ def drivers_serving_pincode(pincode):
 
 
 def assign_driver(slot, scheduled_date, pincode):
+    driver_capacity = max_bookings_per_driver_slot()
     candidate_ids = list(drivers_serving_pincode(pincode).values_list("pk", flat=True))
     if not candidate_ids:
         return None
@@ -50,7 +48,7 @@ def assign_driver(slot, scheduled_date, pincode):
     candidate_ids = [
         candidate_id
         for candidate_id in candidate_ids
-        if counts.get(candidate_id, 0) < MAX_BOOKINGS_PER_DRIVER_SLOT
+        if counts.get(candidate_id, 0) < driver_capacity
     ]
     while candidate_ids:
         lowest_count = min(
@@ -75,7 +73,7 @@ def assign_driver(slot, scheduled_date, pincode):
             and DriverSlot.objects.filter(
                 driver_id=chosen_id, slot=slot, date=scheduled_date
             ).count()
-            < MAX_BOOKINGS_PER_DRIVER_SLOT
+            < driver_capacity
         ):
             return driver
 
@@ -139,4 +137,45 @@ def create_booking(
         date=scheduled_date,
         booking=booking,
     )
+    return booking
+
+
+def reassign_booking(booking, new_driver):
+    booking = Booking.objects.select_for_update().get(pk=booking.pk)
+    if new_driver.pk == booking.driver_id:
+        raise ValidationError("Select a different driver.")
+    if booking.address.pincode_id is None:
+        raise ValidationError("The booking address has no service pincode.")
+    try:
+        new_driver = DriverProfile.objects.select_for_update(of=("self",)).get(
+            pk=new_driver.pk
+        )
+    except DriverProfile.DoesNotExist as exc:
+        raise ValidationError("Select an existing driver.") from exc
+
+    if (
+        not drivers_serving_pincode(booking.address.pincode.pincode)
+        .filter(pk=new_driver.pk)
+        .exists()
+    ):
+        raise ValidationError("The driver is unavailable for this pincode.")
+
+    if (
+        DriverSlot.objects.filter(
+            driver=new_driver,
+            slot=booking.slot,
+            date=booking.scheduled_date,
+        ).count()
+        >= max_bookings_per_driver_slot()
+    ):
+        raise ValidationError("The driver has no capacity for this slot.")
+
+    try:
+        reservation = DriverSlot.objects.select_for_update().get(booking=booking)
+    except DriverSlot.DoesNotExist as exc:
+        raise ValidationError("The booking has no driver reservation.") from exc
+    reservation.driver = new_driver
+    reservation.save(update_fields=["driver"])
+    booking.driver = new_driver
+    booking.save()
     return booking

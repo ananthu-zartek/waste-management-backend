@@ -70,6 +70,14 @@ class Booking(TimeStampedModel):
         default=0,
     )
     assigned_at = models.DateTimeField(null=True, blank=True)
+    previous_driver = models.ForeignKey(
+        "drivers.DriverProfile",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="previous_bookings",
+    )
+    reassigned_at = models.DateTimeField(null=True, blank=True)
     confirmed_at = models.DateTimeField(null=True, blank=True)
     completed_at = models.DateTimeField(null=True, blank=True)
     cancelled_at = models.DateTimeField(null=True, blank=True)
@@ -101,12 +109,22 @@ class Booking(TimeStampedModel):
         ]
 
     def save(self, *args, **kwargs):
+        now = timezone.now()
+
         if self.status == self.BookingStatus.CONFIRMED and self.confirmed_at is None:
             self.confirmed_at = timezone.now()
 
         if self.status == self.BookingStatus.CANCELLED and self.cancelled_at is None:
             self.cancelled_at = timezone.now()
 
+        if self.driver_id and self.assigned_at is None:
+            self.assigned_at = now
+
+        if self.pk:
+            old_booking = Booking.objects.get(pk=self.pk)
+            if old_booking.driver_id != self.driver_id:
+                self.previous_driver = old_booking.driver
+                self.reassigned_at = now
         super().save(*args, **kwargs)
 
     def __str__(self):

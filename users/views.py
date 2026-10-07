@@ -51,8 +51,6 @@ class UserViewSet(AllowAnyMixin, viewsets.ModelViewSet):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         user = serializer.validated_data["user"]
-        if not user.is_active:
-            raise PermissionDenied("This account is inactive.")
         refresh = RefreshToken.for_user(user)
         response_data = {
             "access": str(refresh.access_token),

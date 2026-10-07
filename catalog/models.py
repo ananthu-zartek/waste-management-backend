@@ -4,6 +4,22 @@ from django.core.validators import MinValueValidator, RegexValidator
 from users.models import TimeStampedModel
 
 
+class ServiceDay(models.Model):
+    class Day(models.TextChoices):
+        MONDAY = "mon", "Monday"
+        TUESDAY = "tue", "Tuesday"
+        WEDNESDAY = "wed", "Wednesday"
+        THURSDAY = "thu", "Thursday"
+        FRIDAY = "fri", "Friday"
+        SATURDAY = "sat", "Saturday"
+        SUNDAY = "sun", "Sunday"
+
+    code = models.CharField(max_length=3, choices=Day.choices, unique=True)
+
+    def __str__(self):
+        return self.get_code_display()
+
+
 class QuickAction(TimeStampedModel):
     title = models.CharField(max_length=100, unique=True)
     subtitle = models.CharField(max_length=150)
@@ -145,4 +161,4 @@ class WasteSubCategory(TimeStampedModel):
         ]
 
     def __str__(self):
-        return f""
+        return self.name

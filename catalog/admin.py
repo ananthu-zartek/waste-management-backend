@@ -2,7 +2,17 @@ from django.contrib import admin
 
 from .models import QuickAction, WasteType, WasteCategory, WasteSubCategory, TimeSlot
 from .models import ScrapMaterial
-from .models import ServiceArea, ServicePincode
+from .models import ServiceArea, ServiceDay, ServicePincode
+
+
+@admin.register(ServiceDay)
+class ServiceDayAdmin(admin.ModelAdmin):
+    list_display = ("code", "day_name")
+    ordering = ("id",)
+
+    @admin.display(description="Day")
+    def day_name(self, obj):
+        return obj.get_code_display()
 
 
 @admin.register(QuickAction)
