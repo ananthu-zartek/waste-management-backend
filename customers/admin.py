@@ -1,5 +1,5 @@
 from django.contrib import admin
-from django.contrib.gis.admin import GISModelAdmin
+from leaflet.admin import LeafletGeoAdmin
 
 from .models import CustomerProfile, Address
 
@@ -12,7 +12,7 @@ class CustomerProfileAdmin(admin.ModelAdmin):
 
 
 @admin.register(Address)
-class AddressAdmin(GISModelAdmin):
+class AddressAdmin(LeafletGeoAdmin):
     autocomplete_fields = ("pincode",)
     list_select_related = ("customer__user", "pincode")
     list_display = (

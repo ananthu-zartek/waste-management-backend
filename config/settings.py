@@ -47,6 +47,7 @@ INSTALLED_APPS = [
     # Third-party
     "rest_framework",
     "django_filters",
+    "leaflet",
     "django_celery_beat",
     "fcm_django",
 
@@ -68,7 +69,6 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
-SECURE_REFERRER_POLICY = os.getenv("SECURE_REFERRER_POLICY", "same-origin")
 
 ROOT_URLCONF = 'config.urls'
 
