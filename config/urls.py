@@ -18,11 +18,6 @@ Including another URLconf
 from django.contrib import admin
 from django.urls import include, path
 
-handler400 = "config.exceptions.bad_request"
-handler403 = "config.exceptions.permission_denied"
-handler404 = "config.exceptions.not_found"
-handler500 = "config.exceptions.server_error"
-
 urlpatterns = [
     path("admin/", admin.site.urls),
     path("api/v1/", include("users.urls")),

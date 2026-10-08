@@ -10,6 +10,11 @@ venv/
 .venv/
 env/
 
+# Local Docker files
+Dockerfile
+docker-compose.yml
+.dockerignore
+
 # Environment secrets
 .env
 .env.*
