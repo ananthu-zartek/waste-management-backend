@@ -244,51 +244,6 @@ class BookingSerializer(serializers.ModelSerializer):
         source="cancelled_by.user_type", read_only=True
     )
 
-    def validate(self, attrs):
-        instance = self.instance
-        # Cancellation
-        if (
-            instance
-            and attrs.get("status") == Booking.BookingStatus.CANCELLED
-            and instance.status != Booking.BookingStatus.CANCELLED
-        ):
-            slot_start = timezone.make_aware(
-                datetime.combine(instance.scheduled_date, instance.slot.start_time)
-            )
-            request = self.context.get("request")
-            is_customer = (
-                request is not None
-                and getattr(request.user, "user_type", None) == User.UserType.CUSTOMER
-            )
-            cutoff_hours = 0
-            if is_customer:
-                system_configuration = instance.customer.system_configuration
-                cutoff_hours = (
-                    system_configuration.cancellation_cutoff_hours
-                    if system_configuration
-                    else 4
-                )
-            if timezone.now() >= slot_start - timedelta(hours=cutoff_hours):
-                raise serializers.ValidationError(
-                    {"status": "The cancellation deadline has passed."}
-                )
-
-        # Confirmation
-        if (
-            instance
-            and attrs.get("status") == instance.BookingStatus.CONFIRMED
-            and instance.status != instance.BookingStatus.CONFIRMED
-        ):
-            if (
-                timezone.now()
-                >= instance.created_at + SystemConfiguration.get_confirmation_window()
-            ):
-                raise serializers.ValidationError(
-                    {"error": "Booking confirmation window has expired."}
-                )
-
-        return attrs
-
     @transaction.atomic
     def update(self, instance, validated_data):
         new_driver = validated_data.pop("driver_id", None)
