@@ -6,7 +6,7 @@ from rest_framework_simplejwt.exceptions import TokenError
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from customers.models import CustomerProfile
-from .models import User
+from .models import SystemConfiguration, User
 
 STATIC_OTP = "123456"
 
@@ -85,3 +85,21 @@ class TokenRefreshSerializer(serializers.Serializer):
 
 class AccessTokenSerializer(serializers.Serializer):
     access = serializers.CharField(read_only=True)
+
+
+class SystemConfigurationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SystemConfiguration
+        fields = (
+            "id",
+            "minimum_booking_weight",
+            "advance_booking_duration_hours",
+            "cancellation_cutoff_hours",
+            "confirmation_window_minutes",
+            "max_bookings_per_driver_slot",
+            "default_service_days",
+            "maintenance_mode",
+            "created_at",
+            "updated_at",
+        )
+        read_only_fields = ("id", "created_at", "updated_at")

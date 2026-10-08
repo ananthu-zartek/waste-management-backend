@@ -1,16 +1,16 @@
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
-from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
 from config.permission_mixins import AllowAnyMixin
 
-from .models import User
+from .models import SystemConfiguration, User
 from .serializers import (
     STATIC_OTP,
     AccessTokenSerializer,
     AuthenticationResponseSerializer,
     OTPRequestSerializer,
+    SystemConfigurationSerializer,
     TokenRefreshSerializer,
     VerifyOTPSerializer,
 )
@@ -71,3 +71,9 @@ class UserViewSet(AllowAnyMixin, viewsets.ModelViewSet):
             {"access": str(serializer.validated_data["token"].access_token)}
         )
         return Response(response.data)
+
+
+class SystemConfigurationViewSet(viewsets.ModelViewSet):
+    queryset = SystemConfiguration.objects.prefetch_related("default_service_days")
+    serializer_class = SystemConfigurationSerializer
+    http_method_names = ["get", "put", "patch", "head", "options"]
