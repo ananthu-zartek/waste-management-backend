@@ -1,13 +1,10 @@
-from django.core.exceptions import ValidationError
-
-from .models import ServicePincode
+from bookings.models import Booking
 
 
-def validate_service_pincode(pincode, driver=None):
-    supported = ServicePincode.objects.filter(
-        pincode=pincode, is_active=True, service_area__is_active=True
-    )
-    if not supported.exists():
-        raise ValidationError("Select an active service-area pincode.")
-    if driver is not None and not supported.filter(drivers=driver).exists():
-        raise ValidationError("This driver does not serve the selected pincode.")
+CAPACITY_STATUSES = (
+    Booking.BookingStatus.PENDING,
+    Booking.BookingStatus.ASSIGNED,
+    Booking.BookingStatus.CONFIRMED,
+    Booking.BookingStatus.IN_PROGRESS,
+    Booking.BookingStatus.COMPLETED,
+)

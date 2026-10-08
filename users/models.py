@@ -1,3 +1,5 @@
+from datetime import timedelta
+
 from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin
 from django.core.validators import MinValueValidator
 from django.db import models
@@ -42,6 +44,7 @@ class SystemConfiguration(TimeStampedModel):
     )
     advance_booking_duration_hours = models.PositiveSmallIntegerField(default=24)
     cancellation_cutoff_hours = models.PositiveSmallIntegerField(default=4)
+    confirmation_window_minutes = models.PositiveSmallIntegerField(default=30)
     max_bookings_per_driver_slot = models.PositiveSmallIntegerField(
         default=4,
         validators=[MinValueValidator(1)],
@@ -51,6 +54,24 @@ class SystemConfiguration(TimeStampedModel):
         "catalog.ServiceDay", blank=True, related_name="system_configurations"
     )
     maintenance_mode = models.BooleanField(default=False)
+
+    @classmethod
+    def get_max_bookings_per_driver_slot(cls):
+        configured = cls.objects.values_list(
+            "max_bookings_per_driver_slot", flat=True
+        ).first()
+        if configured is not None:
+            return configured
+        return 4
+
+    @classmethod
+    def get_confirmation_window(cls):
+        minutes = cls.objects.values_list(
+            "confirmation_window_minutes", flat=True
+        ).first()
+        if minutes is None:
+            minutes = 30
+        return timedelta(minutes=minutes)
 
     class Meta:
         verbose_name = "System configuration"

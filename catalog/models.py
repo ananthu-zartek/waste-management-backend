@@ -1,7 +1,10 @@
+from datetime import datetime, timedelta
+
 from django.db import models
 from django.core.validators import MinValueValidator, RegexValidator
-
-from users.models import TimeStampedModel
+from django.utils import timezone
+from .services import CAPACITY_STATUSES
+from users.models import SystemConfiguration, TimeStampedModel
 
 
 class ServiceDay(models.Model):
@@ -57,6 +60,15 @@ class ServicePincode(TimeStampedModel):
     area_name = models.CharField(max_length=150)
     is_active = models.BooleanField(default=True)
 
+    @classmethod
+    def validate_pincode(cls, pincode, driver=None):
+        supported = cls.objects.filter(
+            pincode=pincode, is_active=True, service_area__is_active=True
+        )
+        if driver is not None:
+            supported = supported.filter(drivers=driver)
+        return supported.exists()
+
     class Meta:
         ordering = ["pincode"]
 
@@ -86,8 +98,34 @@ class ScrapMaterial(TimeStampedModel):
 class TimeSlot(TimeStampedModel):
     start_time = models.TimeField()
     end_time = models.TimeField()
-    capacity = models.PositiveSmallIntegerField(default=4, validators=[MinValueValidator(1)])
+    capacity = models.PositiveSmallIntegerField(
+        default=4, validators=[MinValueValidator(1)]
+    )
     is_active = models.BooleanField(default=True)
+
+    def slot_is_future(self, scheduled_date):
+        slot_start = timezone.make_aware(
+            datetime.combine(scheduled_date, self.start_time)
+        )
+        advance_hours = SystemConfiguration.objects.values_list(
+            "advance_booking_duration_hours", flat=True
+        ).first()
+        if advance_hours is None:
+            advance_hours = 24
+        now = timezone.now()
+        return now < slot_start <= now + timedelta(hours=advance_hours)
+
+    def is_service_day(self, scheduled_date):
+        config = SystemConfiguration.objects.first()
+        if config is None:
+            return True
+        day_code = ServiceDay.Day.values[scheduled_date.weekday()]
+        return config.default_service_days.filter(code=day_code).exists()
+
+    def occupied_capacity(self, scheduled_date):
+        return self.bookings.filter(
+            scheduled_date=scheduled_date, status__in=CAPACITY_STATUSES
+        ).count()
 
     class Meta:
         ordering = ["start_time"]

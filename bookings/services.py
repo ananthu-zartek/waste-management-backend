@@ -1,38 +1,21 @@
 import random
-from datetime import datetime
-
 from django.core.exceptions import ValidationError
 from django.db.models import Count
 from django.utils import timezone
 
 from drivers.models import DriverProfile, DriverSlot
-from users.models import User
+from users.models import SystemConfiguration
 from catalog.models import TimeSlot
 
 from .exceptions import NoSlotAvailable, NoDriversAvailable
 from .models import Booking
-from .capacity import max_bookings_per_driver_slot, occupied_slot_capacity
-
-
-def slot_is_future(slot, scheduled_date):
-    slot_start = timezone.make_aware(datetime.combine(scheduled_date, slot.start_time))
-    return slot_start > timezone.now()
-
-
-def drivers_serving_pincode(pincode):
-    return DriverProfile.objects.filter(
-        is_available=True,
-        user__is_active=True,
-        user__user_type=User.UserType.DRIVER,
-        service_pincodes__pincode=pincode,
-        service_pincodes__is_active=True,
-        service_pincodes__service_area__is_active=True,
-    ).distinct()
 
 
 def assign_driver(slot, scheduled_date, pincode):
-    driver_capacity = max_bookings_per_driver_slot()
-    candidate_ids = list(drivers_serving_pincode(pincode).values_list("pk", flat=True))
+    driver_capacity = SystemConfiguration.get_max_bookings_per_driver_slot()
+    candidate_ids = list(
+        DriverProfile.drivers_serving_pincode(pincode).values_list("pk", flat=True)
+    )
     if not candidate_ids:
         return None
     reservations = (
@@ -69,7 +52,7 @@ def assign_driver(slot, scheduled_date, pincode):
             continue
 
         if (
-            drivers_serving_pincode(pincode).filter(pk=chosen_id).exists()
+            DriverProfile.drivers_serving_pincode(pincode).filter(pk=chosen_id).exists()
             and DriverSlot.objects.filter(
                 driver_id=chosen_id, slot=slot, date=scheduled_date
             ).count()
@@ -97,10 +80,13 @@ def create_booking(
 
     slot = TimeSlot.objects.select_for_update().get(pk=slot.pk)
 
-    if not slot.is_active or not slot_is_future(slot, scheduled_date):
+    if not slot.is_service_day(scheduled_date):
+        raise ValidationError("The selected date is not a service day.")
+
+    if not slot.is_active or not slot.slot_is_future(scheduled_date):
         raise ValidationError("Select an active, future time slot.")
 
-    if occupied_slot_capacity(slot, scheduled_date) >= slot.capacity:
+    if slot.occupied_capacity(scheduled_date) >= slot.capacity:
         raise NoSlotAvailable()
 
     if address.customer_id != customer.pk:
@@ -155,7 +141,7 @@ def reassign_booking(booking, new_driver):
         raise ValidationError("Select an existing driver.") from exc
 
     if (
-        not drivers_serving_pincode(booking.address.pincode.pincode)
+        not DriverProfile.drivers_serving_pincode(booking.address.pincode.pincode)
         .filter(pk=new_driver.pk)
         .exists()
     ):
@@ -167,7 +153,7 @@ def reassign_booking(booking, new_driver):
             slot=booking.slot,
             date=booking.scheduled_date,
         ).count()
-        >= max_bookings_per_driver_slot()
+        >= SystemConfiguration.get_max_bookings_per_driver_slot()
     ):
         raise ValidationError("The driver has no capacity for this slot.")
 

@@ -12,7 +12,7 @@ from customers.serializers import AddressSerializer, CustomerProfileSerializer
 from drivers.models import DriverProfile
 from drivers.serializers import DriverProfileSerializer
 from catalog.serializers import WasteSubCategorySerializer
-from users.models import User
+from users.models import SystemConfiguration, User
 
 from .models import (
     Booking,
@@ -21,7 +21,6 @@ from .models import (
     ScrapBookingItem,
 )
 from . import services, waste_services, scrap_services
-from .capacity import CONFIRMATION_WINDOW
 
 
 class WasteItemInputSerializer(serializers.Serializer):
@@ -295,7 +294,10 @@ class BookingSerializer(serializers.ModelSerializer):
             and attrs.get("status") == instance.BookingStatus.CONFIRMED
             and instance.status != instance.BookingStatus.CONFIRMED
         ):
-            if timezone.now() >= instance.created_at + CONFIRMATION_WINDOW:
+            if (
+                timezone.now()
+                >= instance.created_at + SystemConfiguration.get_confirmation_window()
+            ):
                 raise serializers.ValidationError(
                     {"error": "Booking confirmation window has expired."}
                 )

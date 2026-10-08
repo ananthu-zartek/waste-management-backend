@@ -22,6 +22,17 @@ class DriverProfile(TimeStampedModel):
         limit_choices_to={"is_active": True, "service_area__is_active": True},
     )
 
+    @classmethod
+    def drivers_serving_pincode(cls, pincode):
+        return cls.objects.filter(
+            is_available=True,
+            user__is_active=True,
+            user__user_type=User.UserType.DRIVER,
+            service_pincodes__pincode=pincode,
+            service_pincodes__is_active=True,
+            service_pincodes__service_area__is_active=True,
+        ).distinct()
+
     def __str__(self):
         return f"{self.user} - {self.vehicle_number}"
 

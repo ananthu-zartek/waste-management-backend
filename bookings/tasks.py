@@ -2,16 +2,16 @@ from celery import shared_task
 from django.db import transaction
 from django.utils import timezone
 
-from drivers.models import DriverSlot
+from users.models import SystemConfiguration
 
-from .capacity import CONFIRMATION_WINDOW
 from .models import Booking
 
 
 @shared_task
 def expire_pending_bookings():
     """Release overdue holds, locking the same booking row as confirmation."""
-    cutoff = timezone.now() - CONFIRMATION_WINDOW
+    confirmation_window = SystemConfiguration.get_confirmation_window()
+    cutoff = timezone.now() - confirmation_window
     expired_count = 0
     for _ in range(500):
         with transaction.atomic():
@@ -28,7 +28,7 @@ def expire_pending_bookings():
             if booking is None:
                 break
             booking.status = Booking.BookingStatus.EXPIRED
-            booking.expired_at = booking.created_at + CONFIRMATION_WINDOW
+            booking.expired_at = booking.created_at + confirmation_window
             booking.save(update_fields=["status", "expired_at", "updated_at"])
             expired_count += 1
     return expired_count

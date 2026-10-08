@@ -3,9 +3,9 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.db.models import Count
 
-from bookings.services import drivers_serving_pincode, slot_is_future
-from bookings.capacity import CAPACITY_STATUSES
 from bookings.models import Booking
+from drivers.models import DriverProfile
+from .services import CAPACITY_STATUSES
 
 from .models import (
     QuickAction,
@@ -67,10 +67,14 @@ class TimeSlotViewSet(viewsets.ModelViewSet):
         query.is_valid(raise_exception=True)
         date = query.validated_data["date"]
         slots = list(TimeSlot.objects.filter(is_active=True))
-        future_slots = [slot for slot in slots if slot_is_future(slot, date)]
+        future_slots = [
+            slot for slot in slots if slot.is_service_day(date) and slot.slot_is_future(date)
+        ]
         remaining_by_slot = {}
         if future_slots:
-            eligible = drivers_serving_pincode(query.validated_data["pincode"])
+            eligible = DriverProfile.drivers_serving_pincode(
+                query.validated_data["pincode"]
+            )
             if eligible.exists():
                 remaining_by_slot = {
                     slot.pk: slot.capacity for slot in future_slots

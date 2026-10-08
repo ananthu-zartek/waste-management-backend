@@ -1,8 +1,6 @@
 from rest_framework import serializers
-from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import transaction
 from django.utils import timezone
-from .services import validate_service_pincode
 
 from .models import (
     QuickAction,
@@ -59,10 +57,10 @@ class SlotAvailabilityQuerySerializer(serializers.Serializer):
         return value
 
     def validate(self, attrs):
-        try:
-            validate_service_pincode(attrs["pincode"])
-        except DjangoValidationError as exc:
-            raise serializers.ValidationError(exc.message_dict) from exc
+        if not ServicePincode.validate_pincode(attrs["pincode"]):
+            raise serializers.ValidationError(
+                {"pincode": "Select an active service-area pincode."}
+            )
         return attrs
 
 
