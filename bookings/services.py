@@ -1,6 +1,6 @@
 import random
-from django.core.exceptions import ValidationError
 from django.db.models import Count
+from rest_framework.exceptions import ValidationError
 
 from drivers.models import DriverProfile, DriverSlot
 from users.models import SystemConfiguration

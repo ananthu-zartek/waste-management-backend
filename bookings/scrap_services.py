@@ -1,7 +1,7 @@
 from decimal import Decimal, ROUND_HALF_UP
 
-from django.core.exceptions import ValidationError
 from django.db.models import Sum
+from rest_framework.exceptions import ValidationError
 
 from .models import Booking, ScrapBookingItem
 from .services import create_booking

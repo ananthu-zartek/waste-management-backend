@@ -1,11 +1,9 @@
-from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import transaction
 from django.db.models import CharField
 from django.db.models.functions import Cast
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import viewsets
 from rest_framework.decorators import action
-from rest_framework.exceptions import ValidationError
 from rest_framework.filters import SearchFilter
 from rest_framework.response import Response
 
@@ -76,10 +74,7 @@ class BookingViewSet(UserScopedQuerysetMixin, viewsets.ModelViewSet):
     def quote(self, request):
         serializer = ScrapQuoteSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        try:
-            items = quote_scrap(serializer.validated_data["scrap_items"])
-        except DjangoValidationError as exc:
-            raise ValidationError(getattr(exc, "message_dict", exc.messages))
+        items = quote_scrap(serializer.validated_data["scrap_items"])
         return Response(
             {
                 "items": [

@@ -1,4 +1,4 @@
-from django.core.exceptions import ValidationError
+from rest_framework.exceptions import ValidationError
 
 from .models import Booking, BookingWasteItem
 from .services import create_booking
