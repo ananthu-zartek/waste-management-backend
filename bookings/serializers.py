@@ -17,7 +17,6 @@ from users.models import SystemConfiguration, User
 from .models import (
     Booking,
     BookingWasteItem,
-    ScrapBooking,
     ScrapBookingItem,
 )
 from . import services, waste_services, scrap_services
@@ -127,8 +126,7 @@ class BookingCreateSerializer(serializers.ModelSerializer):
 
     @transaction.atomic
     def create(self, validated_data):
-        validated_data["customer"] = self.get_customer_profile()
-        validated_data["source"] = Booking.BookingSource.CUSTOMER
+        validated_data["customer"] = self.context["request"].user.customer_profile
         booking_type = validated_data.pop("booking_type")
         waste_items = validated_data.pop("waste_items", [])
         scrap_items = validated_data.pop("scrap_items", [])
@@ -191,7 +189,7 @@ class ScrapBookingItemSerializer(serializers.ModelSerializer):
         model = ScrapBookingItem
         fields = [
             "id",
-            "scrap_booking",
+            "booking",
             "material",
             "name",
             "estimated_weight",
@@ -202,7 +200,7 @@ class ScrapBookingItemSerializer(serializers.ModelSerializer):
             "id",
             "created_at",
             "estimated_payout",
-            "scrap_booking",
+            "booking",
             "material",
         ]
 
@@ -216,23 +214,12 @@ class ScrapBookingItemSerializer(serializers.ModelSerializer):
 
 
 class ScrapBookingItemCreateSerializer(ScrapBookingItemSerializer):
-    scrap_booking = serializers.PrimaryKeyRelatedField(
-        queryset=ScrapBooking.objects.filter(
-            booking__booking_type=Booking.BookingType.SCRAP
-        )
+    booking = serializers.PrimaryKeyRelatedField(
+        queryset=Booking.objects.filter(booking_type=Booking.BookingType.SCRAP)
     )
 
     class Meta(ScrapBookingItemSerializer.Meta):
         read_only_fields = ["id", "created_at", "estimated_payout"]
-
-
-class ScrapBookingSerializer(serializers.ModelSerializer):
-    items = ScrapBookingItemSerializer(many=True, read_only=True)
-
-    class Meta:
-        model = ScrapBooking
-        fields = ["id", "booking", "items", "created_at", "updated_at"]
-        read_only_fields = ["id", "created_at", "updated_at"]
 
 
 class BookingSlotSerializer(serializers.Serializer):
@@ -250,9 +237,7 @@ class BookingSerializer(serializers.ModelSerializer):
     reassigned_at = serializers.DateTimeField(read_only=True)
     address = AddressSerializer(read_only=True)
     waste_items = BookingWasteItemSerializer(many=True, read_only=True)
-    scrap_items = ScrapBookingItemSerializer(
-        source="scrap_booking.items", many=True, read_only=True, default=list
-    )
+    scrap_items = ScrapBookingItemSerializer(many=True, read_only=True)
     slot_details = BookingSlotSerializer(source="slot", read_only=True)
     reference = serializers.SerializerMethodField()
     cancelled_by = serializers.CharField(

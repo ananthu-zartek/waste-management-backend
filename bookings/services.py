@@ -1,7 +1,6 @@
 import random
 from django.core.exceptions import ValidationError
 from django.db.models import Count
-from django.utils import timezone
 
 from drivers.models import DriverProfile, DriverSlot
 from users.models import SystemConfiguration
@@ -65,7 +64,6 @@ def assign_driver(slot, scheduled_date, pincode):
 
 
 def create_booking(
-    *,
     customer,
     address,
     slot,
@@ -74,7 +72,6 @@ def create_booking(
     estimated_weight=0,
     estimated_payout=0,
     note="",
-    source=Booking.BookingSource.CUSTOMER,
 ):
     """Create a booking and reserve capacity inside the caller's transaction."""
 
@@ -101,7 +98,6 @@ def create_booking(
     if driver is None:
         raise NoDriversAvailable()
 
-    now = timezone.now()
     booking = Booking(
         customer=customer,
         driver=driver,
@@ -109,10 +105,7 @@ def create_booking(
         slot=slot,
         scheduled_date=scheduled_date,
         booking_type=booking_type,
-        source=source,
         status=Booking.BookingStatus.CONFIRMED,
-        assigned_at=now if driver is not None else None,
-        confirmed_at=now if source == Booking.BookingSource.ADMIN else None,
         estimated_weight=estimated_weight,
         note=note,
         estimated_payout=estimated_payout,

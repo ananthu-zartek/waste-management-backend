@@ -13,7 +13,7 @@ from rest_framework.response import Response
 from . import scrap_services
 from .filters import BookingFilter
 from .mixins import UserScopedQuerysetMixin
-from .models import Booking, BookingWasteItem, ScrapBooking, ScrapBookingItem
+from .models import Booking, BookingWasteItem, ScrapBookingItem
 from .scrap_services import quote_scrap
 from .serializers import (
     BookingCreateSerializer,
@@ -22,7 +22,6 @@ from .serializers import (
     BookingWasteItemSerializer,
     ScrapBookingItemCreateSerializer,
     ScrapBookingItemSerializer,
-    ScrapBookingSerializer,
     ScrapQuoteSerializer,
 )
 
@@ -39,11 +38,10 @@ class BookingViewSet(UserScopedQuerysetMixin, viewsets.ModelViewSet):
             "address__customer__user",
             "address__pincode",
             "slot",
-            "scrap_booking",
         )
         .prefetch_related(
             "waste_items__subcategory__category",
-            "scrap_booking__items__material",
+            "scrap_items__material",
         )
         .annotate(search_id=Cast("id", output_field=CharField()))
         .order_by("scheduled_date", "slot__start_time", "pk")
@@ -114,19 +112,11 @@ class BookingWasteItemViewSet(UserScopedQuerysetMixin, viewsets.ModelViewSet):
         return BookingWasteItemSerializer
 
 
-class ScrapBookingViewSet(UserScopedQuerysetMixin, viewsets.ReadOnlyModelViewSet):
-    queryset = ScrapBooking.objects.select_related("booking").prefetch_related(
-        "items__material"
-    )
-    customer_lookup = "booking__customer__user"
-    serializer_class = ScrapBookingSerializer
-
-
 class ScrapBookingItemViewSet(UserScopedQuerysetMixin, viewsets.ModelViewSet):
     queryset = ScrapBookingItem.objects.select_related(
-        "scrap_booking", "scrap_booking__booking", "material"
+        "booking", "material"
     )
-    customer_lookup = "scrap_booking__booking__customer__user"
+    customer_lookup = "booking__customer__user"
     serializer_class = ScrapBookingItemSerializer
 
     def get_serializer_class(self):

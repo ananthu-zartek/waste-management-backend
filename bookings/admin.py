@@ -5,7 +5,6 @@ from . import scrap_services
 from .models import (
     Booking,
     BookingWasteItem,
-    ScrapBooking,
     ScrapBookingItem,
 )
 
@@ -60,30 +59,22 @@ class BookingWasteItemAdmin(admin.ModelAdmin):
         return ("booking",) if obj else ()
 
 
-@admin.register(ScrapBooking)
-class ScrapBookingAdmin(admin.ModelAdmin):
-    list_display = ("id", "booking", "created_at")
-    search_fields = ("=booking__id",)
-    autocomplete_fields = ("booking",)
-    list_select_related = ("booking__customer__user",)
-
-
 @admin.register(ScrapBookingItem)
 class ScrapBookingItemAdmin(admin.ModelAdmin):
     list_display = (
         "id",
-        "scrap_booking",
+        "booking",
         "material",
         "name",
         "estimated_weight",
     )
-    search_fields = ("material__name", "=scrap_booking__booking__id")
-    autocomplete_fields = ("scrap_booking", "material")
-    list_select_related = ("scrap_booking", "material")
+    search_fields = ("material__name", "=booking__id")
+    autocomplete_fields = ("booking", "material")
+    list_select_related = ("booking", "material")
 
     def get_readonly_fields(self, request, obj=None):
         return (
-            ("scrap_booking", "material", "estimated_payout")
+            ("booking", "material", "estimated_payout")
             if obj
             else ("estimated_payout",)
         )
@@ -94,7 +85,7 @@ class ScrapBookingItemAdmin(admin.ModelAdmin):
             scrap_services.update_item(obj, **data)
         else:
             obj.pk = scrap_services.add_item(
-                scrap_booking=obj.scrap_booking, material=obj.material, **data
+                booking=obj.booking, material=obj.material, **data
             ).pk
 
     def delete_model(self, request, obj):

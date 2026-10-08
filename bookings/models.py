@@ -145,22 +145,13 @@ class BookingWasteItem(TimeStampedModel):
         return f"Booking {self.booking_id} - {self.subcategory}"
 
 
-class ScrapBooking(TimeStampedModel):
-    booking = models.OneToOneField(
-        Booking, on_delete=models.CASCADE, related_name="scrap_booking"
-    )
-
-    def __str__(self):
-        return f"Scrap booking {self.booking_id}"
-
-
 class ScrapBookingItem(TimeStampedModel):
     name = models.CharField(max_length=150, blank=True, default="")
     material = models.ForeignKey(
         "catalog.ScrapMaterial", on_delete=models.PROTECT, related_name="booking_items"
     )
-    scrap_booking = models.ForeignKey(
-        ScrapBooking, on_delete=models.CASCADE, related_name="items"
+    booking = models.ForeignKey(
+        Booking, on_delete=models.CASCADE, related_name="scrap_items"
     )
     estimated_payout = models.DecimalField(
         max_digits=10,

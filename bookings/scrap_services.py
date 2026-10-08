@@ -3,7 +3,7 @@ from decimal import Decimal, ROUND_HALF_UP
 from django.core.exceptions import ValidationError
 from django.db.models import Sum
 
-from .models import Booking, ScrapBooking, ScrapBookingItem
+from .models import Booking, ScrapBookingItem
 from .services import create_booking
 
 
@@ -32,7 +32,7 @@ def quote_scrap(items):
 
 
 def update_totals(booking):
-    totals = ScrapBookingItem.objects.filter(scrap_booking__booking=booking).aggregate(
+    totals = ScrapBookingItem.objects.filter(booking=booking).aggregate(
         weight=Sum("estimated_weight", default=0),
         payout=Sum("estimated_payout", default=0),
     )
@@ -45,10 +45,9 @@ def create_scrap_booking(*, scrap_items, **data):
     quoted = quote_scrap(scrap_items)
     data.pop("estimated_weight", None)
     booking = create_booking(booking_type=Booking.BookingType.SCRAP, **data)
-    scrap = ScrapBooking.objects.create(booking=booking)
     for entry, original in zip(quoted, scrap_items):
         ScrapBookingItem.objects.create(
-            scrap_booking=scrap,
+            booking=booking,
             material=entry["material"],
             name=original.get("name") or entry["name"],
             estimated_weight=entry["estimated_weight"],
@@ -58,15 +57,15 @@ def create_scrap_booking(*, scrap_items, **data):
     return booking
 
 
-def add_item(*, scrap_booking, material, estimated_weight, name=""):
+def add_item(*, booking, material, estimated_weight, name=""):
     booking = Booking.objects.select_for_update().get(
-        pk=scrap_booking.booking_id, booking_type=Booking.BookingType.SCRAP
+        pk=booking.pk, booking_type=Booking.BookingType.SCRAP
     )
     quote = quote_scrap([{"material": material, "estimated_weight": estimated_weight}])[
         0
     ]
     item = ScrapBookingItem.objects.create(
-        scrap_booking=scrap_booking,
+        booking=booking,
         material=material,
         name=name or material.name,
         estimated_weight=estimated_weight,
@@ -77,7 +76,7 @@ def add_item(*, scrap_booking, material, estimated_weight, name=""):
 
 
 def update_item(item, **changes):
-    booking = Booking.objects.select_for_update().get(pk=item.scrap_booking.booking_id)
+    booking = Booking.objects.select_for_update().get(pk=item.booking_id)
     item = ScrapBookingItem.objects.select_related("material").get(pk=item.pk)
     for field in ("name", "estimated_weight"):
         if field in changes:
@@ -91,6 +90,6 @@ def update_item(item, **changes):
 
 
 def delete_item(item):
-    booking = Booking.objects.select_for_update().get(pk=item.scrap_booking.booking_id)
+    booking = Booking.objects.select_for_update().get(pk=item.booking_id)
     ScrapBookingItem.objects.filter(pk=item.pk).delete()
     update_totals(booking)
