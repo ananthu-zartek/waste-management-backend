@@ -156,7 +156,6 @@ class BookingWasteItem(TimeStampedModel):
 
 
 class ScrapBookingItem(TimeStampedModel):
-    name = models.CharField(max_length=150, blank=True, default="")
     material = models.ForeignKey(
         "catalog.ScrapMaterial", on_delete=models.PROTECT, related_name="booking_items"
     )

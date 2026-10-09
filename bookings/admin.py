@@ -65,7 +65,6 @@ class ScrapBookingItemAdmin(admin.ModelAdmin):
         "id",
         "booking",
         "material",
-        "name",
         "estimated_weight",
     )
     search_fields = ("material__name", "=booking__id")
@@ -80,7 +79,7 @@ class ScrapBookingItemAdmin(admin.ModelAdmin):
         )
 
     def save_model(self, request, obj, form, change):
-        data = {"name": obj.name, "estimated_weight": obj.estimated_weight}
+        data = {"estimated_weight": obj.estimated_weight}
         if change:
             scrap_services.update_item(obj, **data)
         else:

@@ -22,7 +22,6 @@ class WasteItemInputSerializer(serializers.Serializer):
 
 
 class ScrapItemInputSerializer(serializers.Serializer):
-    name = serializers.CharField(max_length=150, required=False)
     material = serializers.PrimaryKeyRelatedField(
         queryset=ScrapMaterial.objects.filter(is_active=True)
     )
@@ -165,6 +164,7 @@ class BookingWasteItemCreateSerializer(BookingWasteItemSerializer):
 
 
 class ScrapBookingItemSerializer(serializers.ModelSerializer):
+    name = serializers.CharField(source="material.name", read_only=True)
     estimated_weight = serializers.DecimalField(
         max_digits=10, decimal_places=2, min_value=Decimal("0.01")
     )

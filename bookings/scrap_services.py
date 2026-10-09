@@ -45,11 +45,10 @@ def create_scrap_booking(*, scrap_items, **data):
     quoted = quote_scrap(scrap_items)
     data.pop("estimated_weight", None)
     booking = create_booking(booking_type=Booking.BookingType.SCRAP, **data)
-    for entry, original in zip(quoted, scrap_items):
+    for entry in quoted:
         ScrapBookingItem.objects.create(
             booking=booking,
             material=entry["material"],
-            name=original.get("name") or entry["name"],
             estimated_weight=entry["estimated_weight"],
             estimated_payout=entry["estimated_payout"],
         )
@@ -57,7 +56,7 @@ def create_scrap_booking(*, scrap_items, **data):
     return booking
 
 
-def add_item(*, booking, material, estimated_weight, name=""):
+def add_item(*, booking, material, estimated_weight):
     booking = Booking.objects.select_for_update().get(
         pk=booking.pk, booking_type=Booking.BookingType.SCRAP
     )
@@ -67,7 +66,6 @@ def add_item(*, booking, material, estimated_weight, name=""):
     item = ScrapBookingItem.objects.create(
         booking=booking,
         material=material,
-        name=name or material.name,
         estimated_weight=estimated_weight,
         estimated_payout=quote["estimated_payout"],
     )
@@ -78,12 +76,12 @@ def add_item(*, booking, material, estimated_weight, name=""):
 def update_item(item, **changes):
     booking = Booking.objects.select_for_update().get(pk=item.booking_id)
     item = ScrapBookingItem.objects.select_related("material").get(pk=item.pk)
-    for field in ("name", "estimated_weight"):
+    for field in ("estimated_weight",):
         if field in changes:
             setattr(item, field, changes[field])
     item.estimated_payout = (item.estimated_weight * item.material.price_per_kg).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
     item.save(
-        update_fields=["name", "estimated_weight", "estimated_payout", "updated_at"]
+        update_fields=["estimated_weight", "estimated_payout", "updated_at"]
     )
     update_totals(booking)
     return item
