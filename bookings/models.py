@@ -1,6 +1,6 @@
 from django.db import models
 
-from users.models import TimeStampedModel
+from users.models import SystemConfiguration, TimeStampedModel
 from django.utils import timezone
 
 
@@ -107,6 +107,16 @@ class Booking(TimeStampedModel):
                 fields=["driver", "scheduled_date"], name="booking_driver_date_idx"
             ),
         ]
+
+    @property
+    def system_configuration(self):
+        return SystemConfiguration.objects.first()
+
+    def is_confirmation_expired(self):
+        return (
+            timezone.now()
+            >= self.created_at + SystemConfiguration.get_confirmation_window()
+        )
 
     def save(self, *args, **kwargs):
         now = timezone.now()

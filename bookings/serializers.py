@@ -9,6 +9,7 @@ from catalog.serializers import WasteSubCategorySerializer
 from customers.serializers import AddressSerializer, CustomerProfileSerializer
 from drivers.models import DriverProfile
 from drivers.serializers import DriverProfileSerializer
+from users.models import SystemConfiguration, User
 
 from . import scrap_services, services, waste_services
 from .models import Booking, BookingWasteItem, ScrapBookingItem
@@ -40,16 +41,12 @@ class BookingCreateSerializer(serializers.ModelSerializer):
 
     def validate(self, attrs):
         try:
-            profile = self.context["request"].user.customer_profile
+            self.context["request"].user.customer_profile
         except ObjectDoesNotExist:
             raise serializers.ValidationError({"error": "Customer profile not found."})
 
-        try:
-            config = profile.system_configuration
-            minimum_weight = config.minimum_booking_weight
-        except ObjectDoesNotExist:
-            minimum_weight = Decimal("5")
-
+        config = SystemConfiguration.objects.first()
+        minimum_weight = config.minimum_booking_weight if config else Decimal("5")
         booking_type = attrs.get("booking_type")
         is_waste = booking_type == Booking.BookingType.WASTE
         item_field = "waste_items" if is_waste else "scrap_items"
@@ -227,22 +224,28 @@ class BookingSerializer(serializers.ModelSerializer):
     scrap_items = ScrapBookingItemSerializer(many=True, read_only=True)
     slot_details = BookingSlotSerializer(source="slot", read_only=True)
     reference = serializers.SerializerMethodField()
-    cancelled_by = serializers.CharField(
+    cancelled_by = serializers.PrimaryKeyRelatedField(
+        queryset=User.objects.all(), required=False, allow_null=True
+    )
+    cancelled_by_type = serializers.CharField(
         source="cancelled_by.user_type", read_only=True
     )
+
+    def validate(self, attrs):
+        request = self.context.get("request")
+        services.validate_booking(
+            self.instance,
+            attrs.get("status"),
+            request.user if request is not None else None,
+        )
+        return attrs
 
     @transaction.atomic
     def update(self, instance, validated_data):
         new_driver = validated_data.pop("driver_id", None)
         if new_driver is not None:
-            return services.reassign_booking(
-                booking=instance, new_driver=new_driver
-            )
-        if (
-            validated_data.get("status") == Booking.BookingStatus.CANCELLED
-            and instance.status != Booking.BookingStatus.CANCELLED
-        ):
-            validated_data["cancelled_by"] = self.context["request"].user
+            return services.reassign_booking(booking=instance, new_driver=new_driver)
+
         return super().update(instance, validated_data)
 
     class Meta:
@@ -275,6 +278,7 @@ class BookingSerializer(serializers.ModelSerializer):
             # Cancellation
             "cancellation_notes",
             "cancelled_by",
+            "cancelled_by_type",
             # Timestamps
             "created_at",
             "updated_at",

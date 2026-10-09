@@ -1,5 +1,5 @@
 from django.contrib.gis.db import models
-from users.models import SystemConfiguration, User
+from users.models import User
 from bookings.models import Booking
 
 
@@ -19,10 +19,6 @@ class CustomerProfile(models.Model):
     @property
     def completed_bookings_count(self):
         return self.bookings.filter(status=Booking.BookingStatus.COMPLETED).count()
-
-    @property
-    def system_configuration(self):
-        return SystemConfiguration.objects.first()
 
     def __str__(self):
         return str(self.user.phone_number)

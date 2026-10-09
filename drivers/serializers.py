@@ -11,6 +11,7 @@ from .models import DriverProfile
 class DriverProfileSerializer(serializers.ModelSerializer):
     phone_number = PhoneNumberField(source="user.phone_number", required=True)
     user_type = serializers.CharField(source="user.user_type", read_only=True)
+    user_id = serializers.IntegerField(read_only=True)
     service_pincodes = serializers.PrimaryKeyRelatedField(
         many=True,
         required=False,
@@ -32,6 +33,7 @@ class DriverProfileSerializer(serializers.ModelSerializer):
             "id",
             "phone_number",
             "user_type",
+            "user_id",
             "name",
             "email",
             "license_number",

@@ -64,6 +64,7 @@ class CustomerProfileSerializer(serializers.ModelSerializer):
         required=False,
     )
     is_active = serializers.BooleanField(source="user.is_active", required=False)
+    user_id = serializers.IntegerField(read_only=True)
     default_address = AddressSerializer(read_only=True)
     completed_bookings_count = serializers.IntegerField(read_only=True)
     user_type = serializers.CharField(
@@ -81,6 +82,7 @@ class CustomerProfileSerializer(serializers.ModelSerializer):
             "id",
             "phone_number",
             "user_type",
+            "user_id",
             "is_active",
             "default_address",
             "completed_bookings_count",

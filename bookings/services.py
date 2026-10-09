@@ -1,13 +1,37 @@
 import random
+from datetime import datetime, timedelta
+
 from django.db.models import Count
+from django.utils import timezone
 from rest_framework.exceptions import ValidationError
 
 from drivers.models import DriverProfile, DriverSlot
-from users.models import SystemConfiguration
+from users.models import SystemConfiguration, User
 from catalog.models import TimeSlot
 
 from .exceptions import NoSlotAvailable, NoDriversAvailable
 from .models import Booking
+
+
+def validate_booking(booking, status, user):
+    if booking is None or status == booking.status:
+        return
+
+    #cancel
+    if status == Booking.BookingStatus.CANCELLED:
+        slot_start = timezone.make_aware(
+            datetime.combine(booking.scheduled_date, booking.slot.start_time)
+        )
+        cutoff_hours = 0
+        if getattr(user, "user_type", None) == User.UserType.CUSTOMER:
+            config = booking.system_configuration
+            cutoff_hours = config.cancellation_cutoff_hours if config else 4
+        if timezone.now() >= slot_start - timedelta(hours=cutoff_hours):
+            raise ValidationError({"status": "The cancellation deadline has passed."})
+    #confirm
+    if status == Booking.BookingStatus.CONFIRMED:
+        if booking.is_confirmation_expired():
+            raise ValidationError({"error": "Booking expired."})
 
 
 def assign_driver(slot, scheduled_date, pincode):
@@ -105,7 +129,7 @@ def create_booking(
         slot=slot,
         scheduled_date=scheduled_date,
         booking_type=booking_type,
-        status=Booking.BookingStatus.CONFIRMED,
+        status=Booking.BookingStatus.PENDING,
         estimated_weight=estimated_weight,
         note=note,
         estimated_payout=estimated_payout,
